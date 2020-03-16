@@ -12,7 +12,7 @@ import weaver.WeaverJps;
 
 aspectdef Launcher
 
-	setDebug();
+	//setDebug();
 
 	//call Polybench("./sources/polybench-c-3.2/", ["datamining", "linear-algebra", "medley", "stencils"]);
 	call Polybench("./sources/polybench-c-3.2/", ["linear-algebra/kernels/2mm"]);

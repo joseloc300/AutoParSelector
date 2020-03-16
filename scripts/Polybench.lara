@@ -7,6 +7,7 @@ import weaver.util.WeaverDataStore;
 import lara.code.Timer;
 import lara.metrics.ExecutionTimeMetric;
 import weaver.Query;
+import lara.Strings;
 
 aspectdef Polybench
 	input
@@ -39,7 +40,7 @@ aspectdef Polybench
 		
 		for (var loop of parLoops) {
 			Clava.pushAst();
-			Parallelize.forLoops(loop);
+			Parallelize.forLoops([loop]);
 			var measuresPar = addTimerPar();
 			var loopId = loop.id;
 			var executorPar = buildAndRun(benchmark, loopId, true);
@@ -214,8 +215,12 @@ function getParLoops() {
 
 function buildAndRun(benchmark, loopId, isPar) {
 	var subFolder = "";
+
+	var loopIdStr = String(loopId);
+	loopIdStr = Strings.replacer(loopIdStr, / /g, "_");
+	
 	if(isPar)
-		subFolder = "/par/" + String(loopId);
+		subFolder = "/par/" + loopIdStr;
 	else
 		subFolder = "/seq";
 	
