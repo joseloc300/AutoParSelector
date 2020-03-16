@@ -23,24 +23,33 @@ aspectdef Polybench
 
 	println("Number of benchmarks found: " + benchmarks.length);
 	println("Processing benchmarks");
-	for (benchmark of benchmarks) {
+	for (var benchmark of benchmarks) {
 		println("Processing: " + benchmark.folder);
 
 		var benchmarkResults = {};
 		benchmarkResults["seq"] = {};
 		benchmarkResults["par"] = {};
 		
-		Clava.pushAst		();
+		Clava.pushAst();
 		rebuildCodeAst(polybenchUtilsFolder, polybenchCPath, benchmark);
 		Clava.pushAst();
 
-		var parallelLoopIds = parallelizeLoops();
-		var measuresPar = addTimerPar();
-		var executorPar = buildAndRun(benchmark, true);
-		benchmarkResults = addResults(benchmarkResults, measuresPar, executorPar, true);
+		var parLoops = getParLoops();
 		Clava.popAst();
+		
+		for (var loop of parLoops) {
+			Clava.pushAst();
+			Parallelize.forLoops(loop);
+			var measuresPar = addTimerPar();
+			var loopId = loop.id;
+			var executorPar = buildAndRun(benchmark, loopId, true);
+			benchmarkResults = addResults(benchmarkResults, measuresPar, executorPar, true);
+			Clava.popAst();
+		}
 
-		var measuresSeq = addTimerSeq(parallelLoopIds);
+		var parLoopIds = getParLoopIds(parLoops);
+
+		var measuresSeq = addTimerSeq(parLoopIds);
 		var executorSeq = buildAndRun(benchmark, false);	
 		benchmarkResults = addResults(benchmarkResults, measuresSeq, executorSeq, false);
 		Clava.popAst();
@@ -52,6 +61,16 @@ aspectdef Polybench
 	Io.writeJson("./results/polybench.json", polybenchResults);
 
 end
+
+function getParLoopIds(parLoops) {
+	var parLoopIds = [];
+
+	for (var loop of parLoops) {
+		parLoopIds.push(loop.id);
+	}
+
+	return parLoopIds;
+}
 
 function addResults(benchmarkResults, measures, executor, isPar) {
 	var name = "";
@@ -78,7 +97,7 @@ function getSubFolders(sourceFolder, benchmarkFolders) {
 	var benchmarks = [];
 	var foldersChecked = [];
 
-	for (folder of benchmarkFolders) {
+	for (var folder of benchmarkFolders) {
 		var folderPath = sourceFolder + folder;
 		
 		if(!Io.isFolder(folderPath)) {
@@ -89,7 +108,7 @@ function getSubFolders(sourceFolder, benchmarkFolders) {
 		var folder = new LocalFolder(folderPath);
 		var fileList = folder.getFileList();
 
-		for (file of fileList) {
+		for (var file of fileList) {
 			var fileString = file.toString();
 			if(fileString.slice(-2) != ".c")
 				continue;
@@ -136,7 +155,6 @@ function addTimerSeq(parallelLoopIds) {
 	var measures = [];
 
 	for(var result of Query.search('function').search('loop').chain()) {
-		// Only time loops inside Polybench kernel functions
 		if(!parallelLoopIds.includes(result["loop"].id)) {
 			continue;
 		}
@@ -167,9 +185,8 @@ function addTimerPar() {
 	return measures;
 }
 
-
-function parallelizeLoops() {
-	var $loops = [];
+function getParLoops() {
+	var loops = [];
 
 	for(var result of Query.search('function').search('loop').chain()) {
 		// Only time loops inside Polybench kernel functions
@@ -177,28 +194,28 @@ function parallelizeLoops() {
 			continue;
 		}
 
-		$loops.push(result["loop"]);
+		loops.push(result["loop"]);
 	}
 
-	Parallelize.forLoops($loops);
+	Parallelize.forLoops(loops);
 
-	var pragmas = Parallelize.getForLoopsPragmas($loops);
+	var pragmas = Parallelize.getForLoopsPragmas(loops);
 	var astIds = Object.keys(pragmas["parallelLoops"]);
 
-	var parallelLoopIds = [];
-	for(var loop of $loops) {
+	var parLoops = [];
+	for(var loop of loops) {
 		if(astIds.includes(loop.astId)) {
-			parallelLoopIds.push(loop.id);
+			parLoops.push(loop);
 		}
 	}
 
-	return parallelLoopIds;
+	return parLoops;
 }
 
-function buildAndRun(benchmark, isPar) {
+function buildAndRun(benchmark, loopId, isPar) {
 	var subFolder = "";
 	if(isPar)
-		subFolder = "/par";
+		subFolder = "/par/" + String(loopId);
 	else
 		subFolder = "/seq";
 	
