@@ -1,0 +1,248 @@
+import clava.autopar.Parallelize;
+import lara.Io;
+import lara.util.LocalFolder;
+import clava.ClavaJoinPoints;
+import lara.cmake.CMaker;
+import weaver.util.WeaverDataStore;
+import lara.code.Timer;
+import lara.metrics.ExecutionTimeMetric;
+import weaver.Query;
+
+aspectdef Polybench
+	input
+		sourceFolder,
+		benchmarkFolders
+	end
+
+	var polybenchResults = {};
+
+	var benchmarks = getSubFolders(sourceFolder, benchmarkFolders);
+
+	var polybenchUtilsFolder = Io.getAbsolutePath(sourceFolder + "utilities/");
+	var polybenchCPath = Io.getPath(polybenchUtilsFolder, "polybench.c");
+
+	println("Number of benchmarks found: " + benchmarks.length);
+	println("Processing benchmarks");
+	for (var benchmark of benchmarks) {
+		println("Processing: " + benchmark.folder);
+
+		var benchmarkResults = {};
+		benchmarkResults["seq"] = {};
+		benchmarkResults["par"] = {};
+		
+		Clava.pushAst();
+		rebuildCodeAst(polybenchUtilsFolder, polybenchCPath, benchmark);
+		Clava.pushAst();
+
+		var parLoops = getParLoops();
+		Clava.popAst();
+		
+		for (var loop of parLoops) {
+			Clava.pushAst();
+			Parallelize.forLoops([loop]);
+			var measuresPar = addTimerPar();
+			var loopId = loop.id;
+			var executorPar = buildAndRun(benchmark, loopId, true);
+			benchmarkResults = addResults(benchmarkResults, measuresPar, executorPar, true);
+			Clava.popAst();
+		}
+
+		var parLoopIds = getParLoopIds(parLoops);
+
+		var measuresSeq = addTimerSeq(parLoopIds);
+		var executorSeq = buildAndRun(benchmark, false);	
+		benchmarkResults = addResults(benchmarkResults, measuresSeq, executorSeq, false);
+		Clava.popAst();
+
+		polybenchResults[benchmark.folder] = benchmarkResults;
+		Io.writeJson(benchmark.outputFolder + "/results.json", benchmarkResults);
+	}
+
+	Io.writeJson("./results/polybench.json", polybenchResults);
+
+end
+
+function getParLoopIds(parLoops) {
+	var parLoopIds = [];
+
+	for (var loop of parLoops) {
+		parLoopIds.push(loop.id);
+	}
+
+	return parLoopIds;
+}
+
+function addResults(benchmarkResults, measures, executor, isPar) {
+	var name = "";
+	if (isPar)
+		name = "par";
+	else
+		name = "seq";
+
+	for(var measure of measures) {
+		var res = measure.report(executor);
+		var newRes = {};
+		newRes.value = res.getValue();
+		newRes.unit = res.getUnit();
+		benchmarkResults[name][measure._prefix] = newRes;
+	}
+
+	return benchmarkResults;
+}
+
+function getSubFolders(sourceFolder, benchmarkFolders) {
+	if (benchmarkFolders.length == 1 && benchmarkFolders[0] == "all")
+		benchmarkFolders = ["datamining", "linear-algebra", "medley", "stencils"];
+
+	var benchmarks = [];
+	var foldersChecked = [];
+
+	for (var folder of benchmarkFolders) {
+		var folderPath = sourceFolder + folder;
+		
+		if(!Io.isFolder(folderPath)) {
+			println(folderPath + " is not a valid folder.");
+			continue;
+		}
+
+		var folder = new LocalFolder(folderPath);
+		var fileList = folder.getFileList();
+
+		for (var file of fileList) {
+			var fileString = file.toString();
+			if(fileString.slice(-2) != ".c")
+				continue;
+
+			var benchmark = createBenchmarkObj(fileString);
+			if(foldersChecked.contains(benchmark.folder))
+				continue;
+
+			benchmarks.push(benchmark);
+			foldersChecked.push(benchmark.folder);
+
+		}
+	}
+	return benchmarks;
+}
+
+function createBenchmarkObj(fileString) {
+	var benchmark = new Object();
+			
+	var lastSlash = fileString.lastIndexOf("/");
+	var polyIndex = fileString.indexOf("polybench");
+	benchmark.c = Io.getAbsolutePath(fileString);
+	benchmark.folder = Io.getAbsolutePath(fileString.slice(0, lastSlash));
+	benchmark.outputFolder = Io.getAbsolutePath("./outputs/" + fileString.slice(polyIndex, lastSlash));
+	benchmark.name = Io.removeExtension(fileString.substring(lastSlash + 1));
+
+	return benchmark;
+}
+
+function rebuildCodeAst(polybenchUtilsFolder, polybenchCPath, benchmark) {
+	var dataStore = Clava.getData();
+	dataStore.setUserIncludes(polybenchUtilsFolder, benchmark.folder);
+
+	var $polyC = ClavaJoinPoints.file(polybenchCPath);
+	var $benchC = ClavaJoinPoints.file(benchmark.c);
+	Clava.addFile($polyC);
+	Clava.addFile($benchC);
+
+	Clava.rebuild();
+}
+
+function addTimerSeq(parallelLoopIds) {
+
+	var measures = [];
+
+	for(var result of Query.search('function').search('loop').chain()) {
+		if(!parallelLoopIds.includes(result["loop"].id)) {
+			continue;
+		}
+
+		var measure = new ExecutionTimeMetric(result["loop"].id);
+		measures.push(measure);
+		
+		measure.instrument(result["loop"]);
+	}
+
+	return measures;
+}
+
+function addTimerPar() {
+	var measures = [];
+	
+	for(var result of Query.search('pragma')) {
+		if(result.name != "omp")
+			continue;
+
+		var measure = new ExecutionTimeMetric(result.target.id);
+		measures.push(measure);
+		
+		measure.instrument(result, result.target);
+		
+	}
+
+	return measures;
+}
+
+function getParLoops() {
+	var loops = [];
+
+	for(var result of Query.search('function').search('loop').chain()) {
+		// Only time loops inside Polybench kernel functions
+		if(!result["function"].name.startsWith("kernel_") || !result["loop"].isOutermost) {
+			continue;
+		}
+
+		loops.push(result["loop"]);
+	}
+
+	Parallelize.forLoops(loops);
+
+	var pragmas = Parallelize.getForLoopsPragmas(loops);
+	var astIds = Object.keys(pragmas["parallelLoops"]);
+
+	var parLoops = [];
+	for(var loop of loops) {
+		if(astIds.includes(loop.astId)) {
+			parLoops.push(loop);
+		}
+	}
+
+	return parLoops;
+}
+
+function buildAndRun(benchmark, loopId, isPar) {
+	var subFolder = "";
+	if(isPar)
+		subFolder = "/par/" + String(loopId);
+	else
+		subFolder = "/seq";
+	
+	var folder = Io.mkdir(benchmark.outputFolder + subFolder);
+	var buildFolder = Io.mkdir(benchmark.outputFolder + subFolder + "/build");
+	Clava.writeCode(folder);
+
+	var cmaker = new CMaker(benchmark.name);
+
+	cmaker.addCurrentAst();
+	cmaker.addLibs("m");
+	cmaker.addFlags("-O3");	
+	if(isPar)
+		cmaker.addFlags("-fopenmp");
+
+	var exe = cmaker.build(folder, buildFolder);
+	
+	var executor = new ProcessExecutor();	
+	var exeOutput = executor.execute(exe.getAbsolutePath());
+	println("output from executor: " + executor.getConsoleOutput());
+
+	return executor;
+}
+
+/*
+	output
+		a =10, b = "string";
+	end
+*/
+	
