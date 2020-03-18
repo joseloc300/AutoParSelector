@@ -16,6 +16,7 @@ aspectdef Polybench
 	end
 
 	var polybenchResults = {};
+	var nRuns = 3;
 
 	var benchmarks = getSubFolders(sourceFolder, benchmarkFolders);
 
@@ -28,8 +29,6 @@ aspectdef Polybench
 		println("Processing: " + benchmark.folder);
 
 		var benchmarkResults = {};
-		benchmarkResults["seq"] = {};
-		benchmarkResults["par"] = {};
 		
 		Clava.pushAst();
 		rebuildCodeAst(polybenchUtilsFolder, polybenchCPath, benchmark);
@@ -43,16 +42,16 @@ aspectdef Polybench
 			Parallelize.forLoops([loop]);
 			var measuresPar = addTimerPar();
 			var loopId = loop.id;
-			var executorPar = buildAndRun(benchmark, loopId, true);
-			benchmarkResults = addResults(benchmarkResults, measuresPar, executorPar, true);
+			var executorsPar = buildAndRun(benchmark, loopId, nRuns, true);
+			benchmarkResults = addResults(benchmarkResults, measuresPar, executorsPar, true);
 			Clava.popAst();
 		}
 
 		var parLoopIds = getParLoopIds(parLoops);
 
 		var measuresSeq = addTimerSeq(parLoopIds);
-		var executorSeq = buildAndRun(benchmark, false);	
-		benchmarkResults = addResults(benchmarkResults, measuresSeq, executorSeq, false);
+		var executorsSeq = buildAndRun(benchmark, null, nRuns, false);	
+		benchmarkResults = addResults(benchmarkResults, measuresSeq, executorsSeq, false);
 		Clava.popAst();
 
 		polybenchResults[benchmark.folder] = benchmarkResults;
@@ -73,7 +72,7 @@ function getParLoopIds(parLoops) {
 	return parLoopIds;
 }
 
-function addResults(benchmarkResults, measures, executor, isPar) {
+function addResults(benchmarkResults, measures, executors, isPar) {
 	var name = "";
 	if (isPar)
 		name = "par";
@@ -81,12 +80,21 @@ function addResults(benchmarkResults, measures, executor, isPar) {
 		name = "seq";
 
 	for(var measure of measures) {
-		var res = measure.report(executor);
-		var newRes = {};
-		newRes.value = res.getValue();
-		newRes.unit = res.getUnit();
-		benchmarkResults[name][measure._prefix] = newRes;
+		if(isPar) {
+			benchmarkResults[measure._prefix] = {};
+		}
+		var runId = 0;
+		benchmarkResults[measure._prefix][name] = {};
+		for(var executor of executors) {
+			var res = measure.report(executor);
+			var newRes = {};
+			newRes.value = res.getValue();
+			newRes.unit = res.getUnit();
+			benchmarkResults[measure._prefix][name][runId] = newRes;
+			runId++;
+		}
 	}
+	
 
 	return benchmarkResults;
 }
@@ -213,14 +221,16 @@ function getParLoops() {
 	return parLoops;
 }
 
-function buildAndRun(benchmark, loopId, isPar) {
+function buildAndRun(benchmark, loopId, nRuns, isPar) {
 	var subFolder = "";
 
-	var loopIdStr = String(loopId);
-	loopIdStr = Strings.replacer(loopIdStr, / /g, "_");
+	var loopIdStr = "";
 	
-	if(isPar)
+	if(isPar) {
+		loopIdStr = String(loopId);
+		loopIdStr = Strings.replacer(loopIdStr, / /g, "_");
 		subFolder = "/par/" + loopIdStr;
+	}
 	else
 		subFolder = "/seq";
 	
@@ -237,12 +247,19 @@ function buildAndRun(benchmark, loopId, isPar) {
 		cmaker.addFlags("-fopenmp");
 
 	var exe = cmaker.build(folder, buildFolder);
-	
-	var executor = new ProcessExecutor();	
-	var exeOutput = executor.execute(exe.getAbsolutePath());
-	println("output from executor: " + executor.getConsoleOutput());
 
-	return executor;
+	var executors = [];
+	var i;
+	
+	for(i = 0; i < nRuns; i++) {
+		var executor = new ProcessExecutor();	
+		var exeOutput = executor.execute(exe.getAbsolutePath());
+		println("output from executor: " + executor.getConsoleOutput());
+		executors.push(executor);
+	}
+	
+
+	return executors;
 }
 
 /*
