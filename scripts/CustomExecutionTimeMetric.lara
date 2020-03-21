@@ -1,0 +1,76 @@
+import lara.metrics.Metric;
+import lara.metrics.MetricResult;
+import lara.code.Timer;
+import lara.util.TimeUnits;
+import lara.Strings;
+
+import lara.Io;
+
+/**
+ * Measures execution time of an application.
+ */
+function CustomExecutionTimeMetric(prefix, exitAfter) {
+	// Parent constructor
+	Metric.call(this, "Execution Time");
+	
+	this._prefix = prefix === undefined ? "time:" : prefix;
+	this._exitAfter = exitAfter;
+}
+// Inheritance
+CustomExecutionTimeMetric.prototype = Object.create(Metric.prototype);
+
+
+// Override
+CustomExecutionTimeMetric.prototype.instrument = function($start, $end) {
+	var timer = new Timer("NANOSECONDS");
+	timer.setPrintUnit(false);
+	timer.time($start, this._prefix , $end);
+
+	var exitCode = "exit(0);";
+	
+	println("this._exitAfter : " + String(this._exitAfter));
+	if($end && this._exitAfter) {
+		println("entrou if($end && this._exitAfter)");
+		var parentAST = $end.parent.ast;
+		//println($end.parent.ast);
+		Io.appendFile("/home/josecunha/Desktop/Clava/logs/parentAST.txt", parentAST);
+		Io.appendFile("/home/josecunha/Desktop/Clava/logs/parentAST.txt", "\n\n\n");
+
+		var endId = $end.astId;
+		var $siblings = $end.parent.children;
+		var endIndex = -1;
+		for(var i = 0; i < $siblings.length; i++) {
+			if($siblings[i].astId == endId) {
+				endIndex = i;
+				break;
+			}
+		}
+
+		if(endIndex != -1) {
+			var $newJp = $siblings[endIndex + 3];
+			println("$end jpType: " + $end.joinpointType);
+			println("$end src: " + $end.code);
+			println("$newJp jpType: " + $newJp.joinpointType);
+			println("$newJp src: " + $newJp.code);
+			$newJp.insertAfter(exitCode);
+		}
+		
+		
+	}
+	
+}
+
+// Override
+CustomExecutionTimeMetric.prototype.report = function(processExecutor) {
+	var value = Strings.extractValue(this._prefix, processExecutor.getConsoleOutput());	
+
+	return new MetricResult(parseFloat(value), this.getUnit());
+}
+
+CustomExecutionTimeMetric.prototype.getImport = function() {
+	return "lara.metrics.ExecutionTimeMetric";
+}
+
+CustomExecutionTimeMetric.prototype.getUnit = function() {
+	return "ns";
+}

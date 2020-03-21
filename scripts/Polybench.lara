@@ -9,14 +9,20 @@ import lara.metrics.ExecutionTimeMetric;
 import weaver.Query;
 import lara.Strings;
 
+import CustomExecutionTimeMetric;
+
+var now;
+
 aspectdef Polybench
 	input
 		sourceFolder,
 		benchmarkFolders
 	end
 
+	now = new Date(Date.now());
+
 	var polybenchResults = {};
-	var nRuns = 3;
+	var nRuns = 5;
 
 	var benchmarks = getSubFolders(sourceFolder, benchmarkFolders);
 
@@ -40,7 +46,7 @@ aspectdef Polybench
 		for (var loop of parLoops) {
 			Clava.pushAst();
 			Parallelize.forLoops([loop]);
-			var measuresPar = addTimerPar();
+			var measuresPar = addTimerPar(loop);
 			var loopId = loop.id;
 			var executorsPar = buildAndRun(benchmark, loopId, nRuns, true);
 			benchmarkResults = addResults(benchmarkResults, measuresPar, executorsPar, true);
@@ -53,14 +59,18 @@ aspectdef Polybench
 		var executorsSeq = buildAndRun(benchmark, null, nRuns, false);	
 		benchmarkResults = addResults(benchmarkResults, measuresSeq, executorsSeq, false);
 		Clava.popAst();
-
+		
 		polybenchResults[benchmark.folder] = benchmarkResults;
 		Io.writeJson(benchmark.outputFolder + "/results.json", benchmarkResults);
 	}
 
-	Io.writeJson("./results/polybench.json", polybenchResults);
+	Io.writeJson("./results/polybench_" + now.toISOString() + ".json", polybenchResults);
 
 end
+
+function analyzeLoops() {
+	
+}
 
 function getParLoopIds(parLoops) {
 	var parLoopIds = [];
@@ -168,7 +178,7 @@ function addTimerSeq(parallelLoopIds) {
 			continue;
 		}
 
-		var measure = new ExecutionTimeMetric(result["loop"].id);
+		var measure = new CustomExecutionTimeMetric(result["loop"].id, false);
 		measures.push(measure);
 		
 		measure.instrument(result["loop"]);
@@ -177,14 +187,27 @@ function addTimerSeq(parallelLoopIds) {
 	return measures;
 }
 
-function addTimerPar() {
+function addTimerPar($loop) {
 	var measures = [];
 	
 	for(var result of Query.search('pragma')) {
 		if(result.name != "omp")
 			continue;
 
-		var measure = new ExecutionTimeMetric(result.target.id);
+		/*
+		var descendantLoops = result.descendants("loop");
+		println("descendantLoops length: " +  descendantLoops.length);
+		for(var descendant of descendantLoops) {
+			if(descendant.hasNode($loop))
+				println("encontrou");
+		}
+		*/
+
+		var pragmaLoop = result.target;
+		if(pragmaLoop.astId != $loop.astId)
+			continue;
+
+		var measure = new CustomExecutionTimeMetric(result.target.id, true);
 		measures.push(measure);
 		
 		measure.instrument(result, result.target);
@@ -199,9 +222,14 @@ function getParLoops() {
 
 	for(var result of Query.search('function').search('loop').chain()) {
 		// Only time loops inside Polybench kernel functions
+
 		if(!result["function"].name.startsWith("kernel_") || !result["loop"].isOutermost) {
 			continue;
 		}
+		
+
+		println(result["loop"].nestedLevel);
+		println(result["loop"].iterations);
 
 		loops.push(result["loop"]);
 	}
@@ -253,8 +281,10 @@ function buildAndRun(benchmark, loopId, nRuns, isPar) {
 	
 	for(i = 0; i < nRuns; i++) {
 		var executor = new ProcessExecutor();	
+		//executor.setTimeout(1);
+		executor.setPrintToConsole(false);
 		var exeOutput = executor.execute(exe.getAbsolutePath());
-		println("output from executor: " + executor.getConsoleOutput());
+		//println("output from executor: " + executor.getConsoleOutput());
 		executors.push(executor);
 	}
 	
