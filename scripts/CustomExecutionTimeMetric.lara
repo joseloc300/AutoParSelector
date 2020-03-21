@@ -68,7 +68,7 @@ CustomExecutionTimeMetric.prototype.report = function(processExecutor) {
 }
 
 CustomExecutionTimeMetric.prototype.getImport = function() {
-	return "lara.metrics.ExecutionTimeMetric";
+	return "CustomExecutionTimeMetric";
 }
 
 CustomExecutionTimeMetric.prototype.getUnit = function() {
