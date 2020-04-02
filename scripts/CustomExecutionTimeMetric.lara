@@ -46,6 +46,8 @@ CustomExecutionTimeMetric.prototype.instrument = function($start, $end) {
 			}
 		}
 
+		//cause problems in nested loops, cause inserts exit(0) after inner loop finishes, preventing the timing of outer loop
+		/*
 		if(endIndex != -1) {
 			var $newJp = $siblings[endIndex + 3];
 			println("$end jpType: " + $end.joinpointType);
@@ -53,7 +55,7 @@ CustomExecutionTimeMetric.prototype.instrument = function($start, $end) {
 			println("$newJp jpType: " + $newJp.joinpointType);
 			println("$newJp src: " + $newJp.code);
 			$newJp.insertAfter(exitCode);
-		}
+		}*/
 		
 		
 	}
