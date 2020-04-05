@@ -9,30 +9,29 @@ import lara.Io;
 /**
  * Measures execution time of an application.
  */
-function CustomExecutionTimeMetric(prefix, exitAfter) {
+function CustomExecutionTimeMetric(prefix) {
 	// Parent constructor
 	Metric.call(this, "Execution Time");
 	
 	this._prefix = prefix === undefined ? "time:" : prefix;
-	this._exitAfter = exitAfter;
 }
 // Inheritance
 CustomExecutionTimeMetric.prototype = Object.create(Metric.prototype);
 
 
 // Override
-CustomExecutionTimeMetric.prototype.instrument = function($start, $end) {
+CustomExecutionTimeMetric.prototype.instrument = function($start, $end, exitAfter) {
 	var timer = new Timer("NANOSECONDS");
 	timer.setPrintUnit(false);
 	timer.time($start, this._prefix , $end);
 
-	var exitCode = "exit(0);";
 	
-	println("this._exitAfter : " + String(this._exitAfter));
-	if($end && this._exitAfter) {
+
+	if($end && exitAfter) {
+		var exitCode = "exit(0);";
+		
 		println("entrou if($end && this._exitAfter)");
 		var parentAST = $end.parent.ast;
-		//println($end.parent.ast);
 		Io.appendFile("/home/josecunha/Desktop/Clava/logs/parentAST.txt", parentAST);
 		Io.appendFile("/home/josecunha/Desktop/Clava/logs/parentAST.txt", "\n\n\n");
 
@@ -46,8 +45,6 @@ CustomExecutionTimeMetric.prototype.instrument = function($start, $end) {
 			}
 		}
 
-		//cause problems in nested loops, cause inserts exit(0) after inner loop finishes, preventing the timing of outer loop
-		/*
 		if(endIndex != -1) {
 			var $newJp = $siblings[endIndex + 3];
 			println("$end jpType: " + $end.joinpointType);
@@ -55,7 +52,7 @@ CustomExecutionTimeMetric.prototype.instrument = function($start, $end) {
 			println("$newJp jpType: " + $newJp.joinpointType);
 			println("$newJp src: " + $newJp.code);
 			$newJp.insertAfter(exitCode);
-		}*/
+		}
 		
 		
 	}
