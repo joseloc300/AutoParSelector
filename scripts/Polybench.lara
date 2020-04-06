@@ -41,10 +41,11 @@ aspectdef Polybench
 		Clava.pushAst();
 
 		var benchmarkResults = {};
+		benchmarkResults["nRuns"] = nRuns;
 		benchmarkResults["par"] = {};
 		benchmarkResults["par"]["nVersions"] = 0;
 		benchmarkResults["par"]["versions"] = [];
-		benchmarkResults["seq"] = {};
+		benchmarkResults["seq"] = [];
 
 		var loopToIndex = {};
 		var mainLoopIds = [];
@@ -70,8 +71,6 @@ aspectdef Polybench
 			version++;
 			Clava.popAst();
 		}
-
-		
 		
 		var parLoopIds = getParLoopIds(parLoops);
 
@@ -154,7 +153,6 @@ function addResults(benchmarkResults, measures, executors, isPar, loopIndexes, v
 		benchmarkResults["par"]["nVersions"] += 1;
 		info["version"] = version;
 		info["parLoops"] = Array.from(loopIndexes);
-		info["nRuns"] = executors.length;
 		info["measures"] = [];
 	}
 	else
@@ -174,8 +172,8 @@ function addResults(benchmarkResults, measures, executors, isPar, loopIndexes, v
 		measureInfo["loopIndex"] = measure._prefix;
 		measureInfo["runs"] = [];
 		var runId = 0;
-		if(!isPar)
-			benchmarkResults[name][measure._prefix] = {};
+		//if(!isPar)
+		//	benchmarkResults[name][measure._prefix] = {};
 		for(var executor of executors) {
 			var res = measure.report(executor);
 			var newRes = {};
@@ -188,13 +186,17 @@ function addResults(benchmarkResults, measures, executors, isPar, loopIndexes, v
 				measureInfo["runs"].push(newRes);
 			}
 			else {
-				benchmarkResults[name][measure._prefix][runId] = newRes;
+				//benchmarkResults[name][measure._prefix][runId] = newRes;
+				measureInfo["runs"].push(newRes);
 			}
 			runId++;
 		}
 
 		if(isPar) {
 			info["measures"].push(measureInfo);
+		}
+		else {
+			benchmarkResults["seq"].push(measureInfo);
 		}
 	}
 
