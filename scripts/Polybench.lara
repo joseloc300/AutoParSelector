@@ -61,7 +61,7 @@ aspectdef Polybench
 
 			//Parallelize.forLoops([loop]);
 			CustomParallelize.forLoops(loopGroup);
-						
+
 			var measuresPar = addTimerPar(loopGroup, loopToIndex, mainLoopIds);
 			//var compoundId = getCompoundId(loopGroup);
 			//var executorsPar = buildAndRun(benchmark, compoundId, nRuns, true);
@@ -316,7 +316,15 @@ function addTimerPar($loopGroup, loopToIndex, mainLoopIds) {
 		var addExitStatement = true; //mainLoopIds.includes(result.target.id);
 
 		for(var $loop of $loopGroup) {
-			if(mainLoopIds.includes($loop.id)) {
+			/*if(mainLoopIds.includes($loop.id)) {
+				addExitStatement = false;
+				break;
+			}*/
+
+			if(result.target.id == $loop.id)
+				continue;
+			
+			if(checkRankDescendant(result.target.rank, $loop.rank)) {
 				addExitStatement = false;
 				break;
 			}
@@ -327,6 +335,24 @@ function addTimerPar($loopGroup, loopToIndex, mainLoopIds) {
 	}
 
 	return measures;
+}
+
+/**
+checks if loop with the rank loopRank0 is descendant from the loop with the rank loopRank1
+@param loopRank0 array, rank from loop we intend to check
+@param loopRank1 array, rank from loop we intend to check against
+@return true if loop with the rank loopRank0 is descendant from the loop with the rank loopRank1
+**/
+function checkRankDescendant(loopRank0, loopRank1) {
+	if(loopRank0.length <= loopRank1.length)
+		return false;
+	
+	for(var i = 0; i < loopRank1.length; i++) {
+		if(loopRank1[i] != loopRank0[i])
+			return false;
+	}
+
+	return true;
 }
 
 function getParLoopGroups($parLoops, mainLoopIds) {
