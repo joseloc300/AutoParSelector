@@ -59,12 +59,9 @@ aspectdef Polybench
 		for (var loopGroup of parLoopGroups) {
 			Clava.pushAst();
 
-			//Parallelize.forLoops([loop]);
 			CustomParallelize.forLoops(loopGroup);
 
 			var measuresPar = addTimerPar(loopGroup, loopToIndex, mainLoopIds);
-			//var compoundId = getCompoundId(loopGroup);
-			//var executorsPar = buildAndRun(benchmark, compoundId, nRuns, true);
 			var executorsPar = buildAndRun(benchmark, version, nRuns, true);
 			var loopIndexes = getLoopIndexes(loopGroup, loopToIndex);
 			addResults(benchmarkResults, measuresPar, executorsPar, true, loopIndexes, version);
@@ -123,16 +120,6 @@ function addLoopInfo(parLoops, benchmarkResults, loopToIndex, mainLoopIds) {
 	}
 }
 
-function getCompoundId(loopGroup) {
-	var id = "";
-
-	for($loop of loopGroup) {
-		id += $loop.id;
-	}
-
-	return id;
-}
-
 function getParLoopIds(parLoops) {
 	var parLoopIds = [];
 
@@ -148,8 +135,6 @@ function addResults(benchmarkResults, measures, executors, isPar, loopIndexes, v
 	var info = {};
 	if (isPar) {
 		name = "par";
-		//benchmarkResults[name][version] = {};
-		//benchmarkResults[name][version]["parLoops"] = Array.from(loopIndexes);
 		benchmarkResults["par"]["nVersions"] += 1;
 		info["version"] = version;
 		info["parLoops"] = Array.from(loopIndexes);
@@ -158,35 +143,20 @@ function addResults(benchmarkResults, measures, executors, isPar, loopIndexes, v
 	else
 		name = "seq";
 
-
-	println("measures.length: " + measures.length);
-	println("executors.length: " + executors.length);
-
 	for(var measure of measures) {
-		/*
-		if(isPar) {
-			benchmarkResults[measure._prefix] = {};
-		}
-		*/
 		var measureInfo = {};
 		measureInfo["loopIndex"] = measure._prefix;
 		measureInfo["runs"] = [];
 		var runId = 0;
-		//if(!isPar)
-		//	benchmarkResults[name][measure._prefix] = {};
 		for(var executor of executors) {
 			var res = measure.report(executor);
 			var newRes = {};
 			newRes.value = res.getValue();
 			newRes.unit = res.getUnit();
-			//println("newRes.value: " + newRes.value);
-			//println("newRes.unit: " + newRes.unit);
 			if(isPar) {
-				//benchmarkResults[name][version][runId] = newRes;
 				measureInfo["runs"].push(newRes);
 			}
 			else {
-				//benchmarkResults[name][measure._prefix][runId] = newRes;
 				measureInfo["runs"].push(newRes);
 			}
 			runId++;
@@ -297,15 +267,6 @@ function addTimerPar($loopGroup, loopToIndex, mainLoopIds) {
 		if(result.name != "omp")
 			continue;
 
-		/*
-		var descendantLoops = result.descendants("loop");
-		println("descendantLoops length: " +  descendantLoops.length);
-		for(var descendant of descendantLoops) {
-			if(descendant.hasNode($loop))
-				println("encontrou");
-		}
-		*/
-
 		var pragmaLoop = result.target;
 		if(!astIds.includes(pragmaLoop.astId))
 			continue;
@@ -313,14 +274,9 @@ function addTimerPar($loopGroup, loopToIndex, mainLoopIds) {
 		var measure = new CustomExecutionTimeMetric(loopToIndex[result.target.id].toString());
 		measures.push(measure);
 
-		var addExitStatement = true; //mainLoopIds.includes(result.target.id);
+		var addExitStatement = true;
 
 		for(var $loop of $loopGroup) {
-			/*if(mainLoopIds.includes($loop.id)) {
-				addExitStatement = false;
-				break;
-			}*/
-
 			if(result.target.id == $loop.id)
 				continue;
 			
@@ -380,7 +336,6 @@ function getParLoopGroups($parLoops, mainLoopIds) {
 			var $loopDescendants = $loop.descendants("loop");
 			for(var $descendant of $loopDescendants) {
 				if(parLoopIds.includes($descendant.id)) {
-					println("encontrou descendente nos outros loops");
 					processedIds.push($descendant.id);
 					var toAdd = [];
 					for(var loops of currentGroup) {
@@ -407,73 +362,7 @@ function getParLoopGroups($parLoops, mainLoopIds) {
 		
 	}
 
-
-	/*
-	var $parLoopsLvl0 = [];
-	var $parLoopsRest = [];
-	for(var $loop of $parLoops) {
-		if($loop.nestedLevel == 0) {
-			$parLoopsLvl0.push($loop);
-		}
-		else {
-			$parLoopsRest.push($loop);
-		}
-	}*/
-	
-
-	/*for(var $loop of $parLoopsRest) {
-		if(!processedIds.includes($loop.id))
-			$loopGroups.push([$loop]);
-	}*/
-
-	println("$loopGroups.length: " + $loopGroups.length);
-	println("$loopGroups data:\n");
-	for(var index = 0; index < $loopGroups.length; index++) {
-		for(var innerIndex = 0; innerIndex < $loopGroups[index].length; innerIndex++) {
-			//var msg = "  [" + index + "]" + "[" + innerIndex + "] = " + $loopGroups[index][innerIndex].id;
-			var msg = "  [" + index + "]" + "[" + innerIndex + "] = " + $loopGroups[index][innerIndex].line;
-			println(msg);
-		}
-	}
-
 	return $loopGroups;
-
-	/*
-	var $parLoopsLvl0 = [];
-	var $parLoopsRest = [];
-	for(var $loop of $parLoops) {
-		if($loop.nestedLevel == 0) {
-			$parLoopsLvl0.push($loop);
-		}
-		else {
-			$parLoopsRest.push($loop);
-		}
-	}
-
-	//var $orderedLoops = orderByNestLvl($parLoops);
-	var $loopGroupsPar = groupParLoops($parLoopsLvl0, $parLoopsRest);
-	
-	return $loopGroupsPar;*/
-}
-
-function orderByNestLvl($loops) {
-	var $orderedLoops = [];
-	var counter = 0;
-	var lvl = 0;
-	
-	while(counter != $loops.length) {
-		var $currLvlLoops = [];
-		for(var i = 0; i < $loops.length; i++) {
-			if($loops[i].nestedlevel == lvl) {
-				$currLvlLoops.push($loops[i]);
-				counter++;
-			}
-		}
-		lvl++;
-		$orderedLoops.push($currLvlLoops);
-	}
-
-	return $orderedLoops;
 }
 
 function getParLoops() {
@@ -485,10 +374,6 @@ function getParLoops() {
 		if(!result["function"].name.startsWith("kernel_")) {
 			continue;
 		}
-		
-
-		println(result["loop"].nestedLevel);
-		println(result["loop"].iterations);
 
 		loops.push(result["loop"]);
 	}
@@ -506,63 +391,6 @@ function getParLoops() {
 	}
 
 	return parLoops;
-}
-
-function groupParLoops($parLoopsLvl0, $parLoopsRest) {
-	var $loopGroups = [];
-	var processedIds = [];
-	var parLoopsRestIds = [];
-
-	for(var $loop of $parLoopsRest) {
-		parLoopsRestIds.push($loop.id);
-	}
-	
-	for(var $loop of $parLoopsLvl0) {
-		var currentGroup = [];
-		currentGroup.push([$loop]);
-		
-		var $loopDescendants = $loop.descendants("loop");
-		for(var $descendant of $loopDescendants) {
-			if(parLoopsRestIds.includes($descendant.id)) {
-				println("encontrou descendente nos outros loops");
-				processedIds.push($descendant.id);
-				var toAdd = [];
-				for(var loops of currentGroup) {
-					var newLoops = Array.from(loops);
-					newLoops.push($descendant);
-					toAdd.push(newLoops);
-				}
-
-				for(var elem of toAdd) {
-					currentGroup.push(elem);
-				}
-
-				currentGroup.push([$descendant]);
-			}
-		}
-
-		for(var elem of currentGroup) {
-			$loopGroups.push(elem);
-		}
-		
-	}
-
-	for(var $loop of $parLoopsRest) {
-		if(!processedIds.includes($loop.id))
-			$loopGroups.push([$loop]);
-	}
-
-	println("$loopGroups.length: " + $loopGroups.length);
-	println("$loopGroups data:\n");
-	for(var index = 0; index < $loopGroups.length; index++) {
-		for(var innerIndex = 0; innerIndex < $loopGroups[index].length; innerIndex++) {
-			//var msg = "  [" + index + "]" + "[" + innerIndex + "] = " + $loopGroups[index][innerIndex].id;
-			var msg = "  [" + index + "]" + "[" + innerIndex + "] = " + $loopGroups[index][innerIndex].line;
-			println(msg);
-		}
-	}
-
-	return $loopGroups;
 }
 
 function buildAndRun(benchmark, compoundId, nRuns, isPar) {
@@ -597,20 +425,12 @@ function buildAndRun(benchmark, compoundId, nRuns, isPar) {
 	
 	for(i = 0; i < nRuns; i++) {
 		var executor = new ProcessExecutor();	
-		//executor.setTimeout(1);
 		executor.setPrintToConsole(false);
 		var exeOutput = executor.execute(exe.getAbsolutePath());
-		//println("output from executor: " + executor.getConsoleOutput());
 		executors.push(executor);
 	}
 	
 
 	return executors;
 }
-
-/*
-	output
-		a =10, b = "string";
-	end
-*/
 	

@@ -29,11 +29,6 @@ CustomExecutionTimeMetric.prototype.instrument = function($start, $end, exitAfte
 
 	if($end && exitAfter) {
 		var exitCode = "exit(0);";
-		
-		println("entrou if($end && this._exitAfter)");
-		var parentAST = $end.parent.ast;
-		Io.appendFile("/home/josecunha/Desktop/Clava/logs/parentAST.txt", parentAST);
-		Io.appendFile("/home/josecunha/Desktop/Clava/logs/parentAST.txt", "\n\n\n");
 
 		var endId = $end.astId;
 		var $siblings = $end.parent.children;
@@ -47,10 +42,6 @@ CustomExecutionTimeMetric.prototype.instrument = function($start, $end, exitAfte
 
 		if(endIndex != -1) {
 			var $newJp = $siblings[endIndex + 3];
-			println("$end jpType: " + $end.joinpointType);
-			println("$end src: " + $end.code);
-			println("$newJp jpType: " + $newJp.joinpointType);
-			println("$newJp src: " + $newJp.code);
 			$newJp.insertAfter(exitCode);
 		}
 		
