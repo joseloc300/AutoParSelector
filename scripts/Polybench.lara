@@ -48,11 +48,11 @@ aspectdef Polybench
 		benchmarkResults["seq"] = [];
 
 		var loopToIndex = {};
-		var mainLoopIds = [];
+		var mainLoops = [];
 
 		var parLoops = getParLoops();
-		var parLoopGroups = getParLoopGroups(parLoops, mainLoopIds);
-		addLoopInfo(parLoops, benchmarkResults, loopToIndex, mainLoopIds);
+		var parLoopGroups = getParLoopGroups(parLoops, mainLoops);
+		addLoopInfo(parLoops, benchmarkResults, loopToIndex, mainLoops);
 		Clava.popAst();
 
 		var version = 0;
@@ -61,7 +61,7 @@ aspectdef Polybench
 
 			CustomParallelize.forLoops(loopGroup);
 
-			var measuresPar = addTimerPar(loopGroup, loopToIndex, mainLoopIds);
+			var measuresPar = addTimerPar(loopGroup, loopToIndex, mainLoops);
 			var executorsPar = buildAndRun(benchmark, version, nRuns, true);
 			var loopIndexes = getLoopIndexes(loopGroup, loopToIndex);
 			addResults(benchmarkResults, measuresPar, executorsPar, true, loopIndexes, version);
@@ -69,7 +69,7 @@ aspectdef Polybench
 			Clava.popAst();
 		}
 		
-		var parLoopIds = getParLoopIds(parLoops);
+		var parLoopIds = getLoopIds(parLoops);
 
 		var measuresSeq = addTimerSeq(parLoopIds, loopToIndex);
 		var executorsSeq = buildAndRun(benchmark, version, nRuns, false);	
@@ -93,9 +93,10 @@ function getLoopIndexes(loopGroup, loopToIndex) {
 	return indexes;
 }
 
-function addLoopInfo(parLoops, benchmarkResults, loopToIndex, mainLoopIds) {
+function addLoopInfo(parLoops, benchmarkResults, loopToIndex, mainLoops) {
 	benchmarkResults["nLoops"] = parLoops.length;
 	benchmarkResults["loops"] = {};
+	var mainLoopIds = getLoopIds(mainLoops);
 	var index = 0;
 	for(var $loop of parLoops) {
 		benchmarkResults["loops"][index] = {};
@@ -120,14 +121,14 @@ function addLoopInfo(parLoops, benchmarkResults, loopToIndex, mainLoopIds) {
 	}
 }
 
-function getParLoopIds(parLoops) {
-	var parLoopIds = [];
+function getLoopIds($loops) {
+	var loopIds = [];
 
-	for (var loop of parLoops) {
-		parLoopIds.push(loop.id);
+	for (var $loop of $loops) {
+		loopIds.push($loop.id);
 	}
 
-	return parLoopIds;
+	return loopIds;
 }
 
 function addResults(benchmarkResults, measures, executors, isPar, loopIndexes, version) {
@@ -254,28 +255,45 @@ function addTimerSeq(parallelLoopIds, loopToIndex) {
 	return measures;
 }
 
-function addTimerPar($loopGroup, loopToIndex, mainLoopIds) {
-	var measures = [];
+function addTimerMainLoop(mainLoopId, loopToIndex) {
+	var measure;
+	for(var result of Query.search('function').search('loop').chain()) {
+		if(result["loop"].id != mainLoopId) {
+			continue;
+		}
 
-	var astIds = [];
-
-	for(var loop of $loopGroup) {
-		astIds.push(loop.astId);
+		measure = new CustomExecutionTimeMetric("mainLoop_" + loopToIndex[result["loop"].id].toString());		
+		//measure.instrumentMainLoop(result["loop"]);
+		measure.instrument(result["loop"], undefined, true);
+		break;
 	}
+	return measure;
+}
+
+function addTimerPar($loopGroup, loopToIndex, mainLoops) {
+	var measures = [];
+	var loopGroupIds = getLoopIds($loopGroup);
+	var mainLoopIds = getLoopIds(mainLoops);
+	var foundMainLoop = false;
 	
 	for(var result of Query.search('pragma')) {
 		if(result.name != "omp")
 			continue;
 
 		var pragmaLoop = result.target;
-		if(!astIds.includes(pragmaLoop.astId))
+		if(!loopGroupIds.includes(pragmaLoop.id))
 			continue;
 
 		var measure = new CustomExecutionTimeMetric(loopToIndex[result.target.id].toString());
 		measures.push(measure);
 
-		var addExitStatement = true;
-
+		var addExitStatement = false;
+		if(mainLoopIds.includes(result.target.id)) {
+			addExitStatement = true;
+			foundMainLoop = true;
+		}
+		
+		/*
 		for(var $loop of $loopGroup) {
 			if(result.target.id == $loop.id)
 				continue;
@@ -284,19 +302,35 @@ function addTimerPar($loopGroup, loopToIndex, mainLoopIds) {
 				addExitStatement = false;
 				break;
 			}
-		}
+		}*/
 		
 		measure.instrument(result, result.target, addExitStatement);
 		
 	}
 
+	if(!foundMainLoop) {
+		var mainLoopMeasure = findAndTimeMainLoop($loopGroup[0], loopToIndex, mainLoops);
+		measures.push(mainLoopMeasure);
+	}
+
 	return measures;
+}
+
+function findAndTimeMainLoop($loop, loopToIndex, $mainLoops) {
+	var mainLoopMeasure;
+	for(var $mainLoop of $mainLoops) {
+		if(checkRankDescendant($loop.rank, $mainLoop.rank)) {
+			mainLoopMeasure = addTimerMainLoop($mainLoop.id, loopToIndex);
+		}
+	}
+
+	return mainLoopMeasure;
 }
 
 /**
 checks if loop with the rank loopRank0 is descendant from the loop with the rank loopRank1
-@param loopRank0 array, rank from loop we intend to check
-@param loopRank1 array, rank from loop we intend to check against
+@param loopRank0 int[], rank from loop we intend to check
+@param loopRank1 int[], rank from loop we intend to check against
 @return true if loop with the rank loopRank0 is descendant from the loop with the rank loopRank1
 **/
 function checkRankDescendant(loopRank0, loopRank1) {
@@ -311,16 +345,11 @@ function checkRankDescendant(loopRank0, loopRank1) {
 	return true;
 }
 
-function getParLoopGroups($parLoops, mainLoopIds) {
+function getParLoopGroups($parLoops, mainLoops) {
 	var $loopGroups = [];
 	var processedIds = [];
-	var parLoopIds = [];
+	var parLoopIds = getLoopIds($parLoops);
 	var currLvl = 0;
-
-	for(var $loop of $parLoops) {
-		parLoopIds.push($loop.id);
-	}
-
 
 	while(processedIds.length < $parLoops.length) {
 
@@ -331,25 +360,27 @@ function getParLoopGroups($parLoops, mainLoopIds) {
 			var currentGroup = [];
 			currentGroup.push([$loop]);
 			processedIds.push($loop.id);
-			mainLoopIds.push($loop.id);
+			mainLoops.push($loop);
 			
 			var $loopDescendants = $loop.descendants("loop");
 			for(var $descendant of $loopDescendants) {
-				if(parLoopIds.includes($descendant.id)) {
-					processedIds.push($descendant.id);
-					var toAdd = [];
-					for(var loops of currentGroup) {
-						var newLoops = Array.from(loops);
-						newLoops.push($descendant);
-						toAdd.push(newLoops);
-					}
-	
-					for(var elem of toAdd) {
-						currentGroup.push(elem);
-					}
-	
-					currentGroup.push([$descendant]);
+				if(!parLoopIds.includes($descendant.id)) {
+					continue;
 				}
+
+				processedIds.push($descendant.id);
+				var toAdd = [];
+				for(var loops of currentGroup) {
+					var newLoops = Array.from(loops);
+					newLoops.push($descendant);
+					toAdd.push(newLoops);
+				}
+
+				for(var elem of toAdd) {
+					currentGroup.push(elem);
+				}
+
+				currentGroup.push([$descendant]);
 			}
 	
 			for(var elem of currentGroup) {

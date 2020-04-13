@@ -21,33 +21,20 @@ CustomExecutionTimeMetric.prototype = Object.create(Metric.prototype);
 
 // Override
 CustomExecutionTimeMetric.prototype.instrument = function($start, $end, exitAfter) {
+
+	if(exitAfter) {
+		var exitCode = "exit(0);";
+		if($end) {
+			$end.insertAfter(exitCode);
+		}
+		else {
+			$start.insertAfter(exitCode);
+		}
+	}
+
 	var timer = new Timer("NANOSECONDS");
 	timer.setPrintUnit(false);
-	timer.time($start, this._prefix , $end);
-
-	
-
-	if($end && exitAfter) {
-		var exitCode = "exit(0);";
-
-		var endId = $end.astId;
-		var $siblings = $end.parent.children;
-		var endIndex = -1;
-		for(var i = 0; i < $siblings.length; i++) {
-			if($siblings[i].astId == endId) {
-				endIndex = i;
-				break;
-			}
-		}
-
-		if(endIndex != -1) {
-			var $newJp = $siblings[endIndex + 3];
-			$newJp.insertAfter(exitCode);
-		}
-		
-		
-	}
-	
+	timer.time($start, this._prefix , $end);	
 }
 
 // Override
