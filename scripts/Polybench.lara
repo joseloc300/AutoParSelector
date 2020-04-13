@@ -23,10 +23,21 @@ aspectdef Polybench
 
 	now = new Date(Date.now());
 
-	var polybenchResults = {};
+	var start_time = performance.now();
 	var nRuns = 3;
 
+	var polybenchResults = {};
+	polybenchResults["runsPerVersion"] = nRuns;
+	polybenchResults["totalRuns"] = 0;
+	polybenchResults["totalVersions"] = 0;
+	polybenchResults["totalParLoops"] = 0;
+	polybenchResults["totalExecutionTimeInSec"] = 0;
+	polybenchResults["totalBenchmarks"] = 0;
+	polybenchResults["benchmarks"] = [];
+
 	var benchmarks = getSubFolders(sourceFolder, benchmarkFolders);
+
+	polybenchResults["totalBenchmarks"] = benchmarks.length;
 
 	var polybenchUtilsFolder = Io.getAbsolutePath(sourceFolder + "utilities/");
 	var polybenchCPath = Io.getPath(polybenchUtilsFolder, "polybench.c");
@@ -41,7 +52,8 @@ aspectdef Polybench
 		Clava.pushAst();
 
 		var benchmarkResults = {};
-		benchmarkResults["nRuns"] = nRuns;
+		benchmarkResults["benchmark"] = benchmark.folder;
+		
 		benchmarkResults["par"] = {};
 		benchmarkResults["par"]["nVersions"] = 0;
 		benchmarkResults["par"]["versions"] = [];
@@ -51,10 +63,14 @@ aspectdef Polybench
 		var mainLoops = [];
 
 		var parLoops = getParLoops();
+		polybenchResults["totalParLoops"] += parLoops.length;
+		
 		var parLoopGroups = getParLoopGroups(parLoops, mainLoops);
 		addLoopInfo(parLoops, benchmarkResults, loopToIndex, mainLoops);
 		Clava.popAst();
 
+		polybenchResults["totalVersions"] += parLoopGroups.length;
+		polybenchResults["totalRuns"] += parLoopGroups.length * nRuns;
 		var version = 0;
 		for (var loopGroup of parLoopGroups) {
 			Clava.pushAst();
@@ -64,7 +80,8 @@ aspectdef Polybench
 			var measuresPar = addTimerPar(loopGroup, loopToIndex, mainLoops);
 			var executorsPar = buildAndRun(benchmark, version, nRuns, true);
 			var loopIndexes = getLoopIndexes(loopGroup, loopToIndex);
-			addResults(benchmarkResults, measuresPar, executorsPar, true, loopIndexes, version);
+			var mainLoopIndexes = getLoopIndexes(mainLoops, loopToIndex);
+			addResults(benchmarkResults, measuresPar, executorsPar, true, loopIndexes, version, mainLoopIndexes);
 			version++;
 			Clava.popAst();
 		}
@@ -73,13 +90,15 @@ aspectdef Polybench
 
 		var measuresSeq = addTimerSeq(parLoopIds, loopToIndex);
 		var executorsSeq = buildAndRun(benchmark, version, nRuns, false);	
-		addResults(benchmarkResults, measuresSeq, executorsSeq, false, null, null);
+		addResults(benchmarkResults, measuresSeq, executorsSeq, false, null, null, null);
 		Clava.popAst();
 		
-		polybenchResults[benchmark.folder] = benchmarkResults;
+		polybenchResults["benchmarks"].push(benchmarkResults);
 		Io.writeJson(benchmark.outputFolder + "/results.json", benchmarkResults);
 	}
-
+	var end_time = performance.now();
+	polybenchResults["totalExecutionTimeInSec"] = (end_time - start_time) / 1000;
+	
 	Io.writeJson("./results/polybench_" + now.toISOString() + ".json", polybenchResults);
 
 end
@@ -131,7 +150,7 @@ function getLoopIds($loops) {
 	return loopIds;
 }
 
-function addResults(benchmarkResults, measures, executors, isPar, loopIndexes, version) {
+function addResults(benchmarkResults, measures, executors, isPar, loopIndexes, version, mainLoopIndexes) {
 	var name = "";
 	var info = {};
 	if (isPar) {
@@ -139,6 +158,7 @@ function addResults(benchmarkResults, measures, executors, isPar, loopIndexes, v
 		benchmarkResults["par"]["nVersions"] += 1;
 		info["version"] = version;
 		info["parLoops"] = Array.from(loopIndexes);
+		info["mainLoop"] = 0;
 		info["measures"] = [];
 	}
 	else
@@ -146,7 +166,7 @@ function addResults(benchmarkResults, measures, executors, isPar, loopIndexes, v
 
 	for(var measure of measures) {
 		var measureInfo = {};
-		measureInfo["loopIndex"] = measure._prefix;
+		measureInfo["loopIndex"] = parseInt(measure._prefix);
 		measureInfo["runs"] = [];
 		var runId = 0;
 		for(var executor of executors) {
@@ -165,6 +185,8 @@ function addResults(benchmarkResults, measures, executors, isPar, loopIndexes, v
 
 		if(isPar) {
 			info["measures"].push(measureInfo);
+			if(mainLoopIndexes.includes(parseInt(measure._prefix)))
+				info["mainLoop"] = parseInt(measure._prefix);
 		}
 		else {
 			benchmarkResults["seq"].push(measureInfo);
@@ -262,8 +284,7 @@ function addTimerMainLoop(mainLoopId, loopToIndex) {
 			continue;
 		}
 
-		measure = new CustomExecutionTimeMetric("mainLoop_" + loopToIndex[result["loop"].id].toString());		
-		//measure.instrumentMainLoop(result["loop"]);
+		measure = new CustomExecutionTimeMetric(loopToIndex[result["loop"].id].toString());	
 		measure.instrument(result["loop"], undefined, true);
 		break;
 	}
@@ -292,17 +313,6 @@ function addTimerPar($loopGroup, loopToIndex, mainLoops) {
 			addExitStatement = true;
 			foundMainLoop = true;
 		}
-		
-		/*
-		for(var $loop of $loopGroup) {
-			if(result.target.id == $loop.id)
-				continue;
-			
-			if(checkRankDescendant(result.target.rank, $loop.rank)) {
-				addExitStatement = false;
-				break;
-			}
-		}*/
 		
 		measure.instrument(result, result.target, addExitStatement);
 		
