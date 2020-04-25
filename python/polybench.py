@@ -5,65 +5,100 @@ import re
 from sklearn.tree import DecisionTreeRegressor
 from sklearn import linear_model
 from sklearn.isotonic import IsotonicRegression
+from sklearn.svm import SVR
 
-N_FEATURES = 7
+N_FEATURES: int = 9
 
-NESTED_LEVEL_INDEX = 0
-IS_MAIN_LOOP_INDEX = 1
-N_ANCESTORS_INDEX = 2
-N_DESCENDANTS_INDEX = 3
-N_PRIVATES_INDEX = 4
-N_FIRST_PRIVATES_INDEX = 5
-N_REDUCTIONS_INDEX = 6
+NESTED_LEVEL_INDEX: int = 0
+IS_MAIN_LOOP_INDEX: int = 1
+N_ANCESTORS_INDEX: int = 2
+N_DESCENDANTS_INDEX: int = 3
+N_PRIVATES_INDEX: int = 4
+N_FIRST_PRIVATES_INDEX: int = 5
+N_REDUCTIONS_INDEX: int = 6
+IS_INNERMOST_INDEX: int = 7
+IS_OUTERMOST_INDEX: int = 8
+
+loop_features = []
+loop_targets = []
 
 
 def main():
+    global loop_features, loop_targets
     loop_features, loop_targets = load_data()
 
-    linear_models(loop_features, loop_targets)
-    decision_tree_regressor(loop_features, loop_targets)
-    # isotonic_regression(loop_features, loop_targets)
+
+
+    main_algorithms()
+    # supervised_learning()
+    # unsupervised_learning()
 
     exit(0)
 
 
-def split_train_test_data(loop_features, loop_targets, train_ratio):
-    x = np.asarray(loop_features)
-    y = np.asarray(loop_targets)
+# https://scikit-learn.org/stable/tutorial/machine_learning_map/index.html
+def main_algorithms():
+    # few features are important?
+    # YES
+    lasso()
+    elastic_net()
 
-    split_point = int(len(loop_features) * train_ratio)
+    # NO
+    ridge_regression()
+    svr()
 
-    x_train, x_test = np.split(x, [split_point])
-    y_train, y_test = np.split(y, [split_point])
+    # last case scenario
+    ensemble_regressors()
 
-    return x_train, x_test, y_train, y_test
-
-
-def linear_models(loop_features, loop_targets):
-    ordinary_least_squares(loop_features, loop_targets)
-    ridge_regression(loop_features, loop_targets)
-    lasso(loop_features, loop_targets)
-    elastic_net(loop_features, loop_targets)
+    # was having good results
+    decision_tree_regressor()
 
 
-def isotonic_regression(loop_features, loop_targets):
+def svr():
     train_ratio = 0.8
-    x_train, x_test, y_train, y_test = split_train_test_data(loop_features, loop_targets, train_ratio)
+    x_train, x_test, y_train, y_test = split_train_test_data(train_ratio)
 
-    reg = IsotonicRegression()
-    # reg.fit(x_train, y_train)
-    x_new = reg.fit_transform(x_train, y_train)
+    reg = SVR(kernel="linear")
+    reg.fit(x_train, y_train)
 
     score = reg.score(x_test, y_test)
 
-    print("Isotonic Regression")
+    print("SVR linear")
     print(score)
+
+    reg_2 = SVR(kernel="rbf")
+    reg_2.fit(x_train, y_train)
+
+    score_2 = reg_2.score(x_test, y_test)
+
+    print("SVR rbf")
+    print(score_2)
+
+
+def ensemble_regressors():
+    pass
+
+
+# 1
+def supervised_learning():
+    linear_models()
+    decision_tree_regressor()
+    # isotonic_regression()
+
+
+# 1.1
+def linear_models():
+    ordinary_least_squares()
+    ridge_regression()
+    lasso()
+    elastic_net()
+    lars()
 
 
 # 1.1.1
-def ordinary_least_squares(loop_features, loop_targets):
+def ordinary_least_squares():
     train_ratio = 0.8
-    x_train, x_test, y_train, y_test = split_train_test_data(loop_features, loop_targets, train_ratio)
+    x_train, x_test, y_train, y_test = split_train_test_data(train_ratio)
 
     reg = linear_model.LinearRegression()
     reg.fit(x_train, y_train)
@@ -75,9 +110,9 @@ def ordinary_least_squares(loop_features, loop_targets):
 
 
 # 1.1.2
-def ridge_regression(loop_features, loop_targets):
+def ridge_regression():
     train_ratio = 0.8
-    x_train, x_test, y_train, y_test = split_train_test_data(loop_features, loop_targets, train_ratio)
+    x_train, x_test, y_train, y_test = split_train_test_data(train_ratio)
 
     reg = linear_model.Ridge(alpha=0.5)
     reg.fit(x_train, y_train)
@@ -95,9 +130,9 @@ def ridge_regression(loop_features, loop_targets):
 
 
 # 1.1.3
-def lasso(loop_features, loop_targets):
+def lasso():
     train_ratio = 0.8
-    x_train, x_test, y_train, y_test = split_train_test_data(loop_features, loop_targets, train_ratio)
+    x_train, x_test, y_train, y_test = split_train_test_data(train_ratio)
 
     reg = linear_model.Lasso(alpha=0.5)
     reg.fit(x_train, y_train)
@@ -117,13 +152,53 @@ def lasso(loop_features, loop_targets):
 
 
 # 1.1.5
-def elastic_net(loop_features, loop_targets):
-    pass
-
-
-def decision_tree_regressor(loop_features, loop_targets):
+def elastic_net():
     train_ratio = 0.8
-    x_train, x_test, y_train, y_test = split_train_test_data(loop_features, loop_targets, train_ratio)
+    x_train, x_test, y_train, y_test = split_train_test_data(train_ratio)
+
+    reg = linear_model.ElasticNet(alpha=1.0, l1_ratio=0.5)
+    reg.fit(x_train, y_train)
+
+    score = reg.score(x_test, y_test)
+
+    print("Elastic Net")
+    print(score)
+
+    reg_2 = linear_model.ElasticNetCV(l1_ratio=0.5, eps=0.001, n_alphas=100, cv=None)
+    reg_2.fit(x_train, y_train)
+
+    score_2 = reg_2.score(x_test, y_test)
+
+    print("Elastic Net CV")
+    print(score_2)
+
+
+# 1.1.7
+def lars():
+    train_ratio = 0.8
+    x_train, x_test, y_train, y_test = split_train_test_data(train_ratio)
+
+    reg = linear_model.Lars()
+    reg.fit(x_train, y_train)
+
+    score = reg.score(x_test, y_test)
+
+    print("Lars")
+    print(score)
+
+    reg_2 = linear_model.LarsCV(max_iter=500, cv=None)
+    reg_2.fit(x_train, y_train)
+
+    score_2 = reg_2.score(x_test, y_test)
+
+    print("Lars CV")
+    print(score_2)
+
+
+# 1.10.2
+def decision_tree_regressor():
+    train_ratio = 0.8
+    x_train, x_test, y_train, y_test = split_train_test_data(train_ratio)
 
     reg_1 = DecisionTreeRegressor(max_depth=2)
     reg_2 = DecisionTreeRegressor(max_depth=5)
@@ -139,24 +214,41 @@ def decision_tree_regressor(loop_features, loop_targets):
     print(score_2)
 
 
+# 1.15
+def isotonic_regression():
+    train_ratio = 0.8
+    x_train, x_test, y_train, y_test = split_train_test_data(train_ratio)
+
+    reg = IsotonicRegression()
+    # reg.fit(x_train, y_train)
+    x_new = reg.fit_transform(x_train, y_train)
+
+    score = reg.score(x_test, y_test)
+
+    print("Isotonic Regression")
+    print(score)
+
+
+# 2
+def unsupervised_learning():
+    pass
+
+
 def load_data():
     with open('/home/josecunha/Desktop/Clava/results/polybench_2020-04-13T15:47:30.735Z.json') as f:
         data = json.load(f)
 
-    n_loops = 0
-    N_FEATURES = 0
-
-    loop_features = []
-    loop_targets = []
+    local_loop_features = []
+    local_loop_targets = []
 
     runs_per_version = int(data["runsPerVersion"])
 
     for i in range(data["totalBenchmarks"]):
         new_loop_features, new_loop_targets = parse_benchmark_simple(data["benchmarks"][i], runs_per_version)
-        loop_features.extend(new_loop_features)
-        loop_targets.extend(new_loop_targets)
+        local_loop_features.extend(new_loop_features)
+        local_loop_targets.extend(new_loop_targets)
 
-    return loop_features, loop_targets
+    return local_loop_features, local_loop_targets
 
 
 def parse_benchmark_simple(benchmark, runs_per_version):
@@ -171,8 +263,8 @@ def parse_benchmark_simple(benchmark, runs_per_version):
     loops_info = get_loops_info(loops_info_orig)
     avg_seq_times = get_seq_avg_times(benchmark["seq"], runs_per_version)
 
-    loop_features = []
-    loop_targets = []
+    bench_loop_features = []
+    bench_loop_targets = []
 
     for version in benchmark["par"]["versions"]:
         par_loops = version["parLoops"]
@@ -200,10 +292,10 @@ def parse_benchmark_simple(benchmark, runs_per_version):
             loop_info_copy[N_ANCESTORS_INDEX] = n_ancestors
             loop_info_copy[N_DESCENDANTS_INDEX] = n_descendants
 
-            loop_features.append(loop_info_copy)
-            loop_targets.append(speedup)
+            bench_loop_features.append(loop_info_copy)
+            bench_loop_targets.append(speedup)
 
-    return loop_features, loop_targets
+    return bench_loop_features, bench_loop_targets
 
 
 def get_loops_family_info(loops, loop_info_orig):
@@ -214,9 +306,10 @@ def get_loops_family_info(loops, loop_info_orig):
 
         loop = loop_info_orig[loop_key]
 
-        loop_family_info = {}
-        loop_family_info["ancestors"] = 0
-        loop_family_info["descendants"] = 0
+        loop_family_info = {
+            "ancestors": 0,
+            "descendants": 0
+        }
 
         curr_loop_id = loop["id"]
 
@@ -276,6 +369,8 @@ def get_loops_info(loops):
         new_loop = np.zeros(N_FEATURES, np.int)
         new_loop[NESTED_LEVEL_INDEX] = loops[loop_key]["nestedLevel"]
         new_loop[IS_MAIN_LOOP_INDEX] = int(loops[loop_key]["isMainLoop"])
+        new_loop[IS_INNERMOST_INDEX] = int(loops[loop_key]["isInnermost"])
+        new_loop[IS_OUTERMOST_INDEX] = int(loops[loop_key]["isOutermost"])
 
         pragma_info = get_pragma_info(loops[loop_key]["pragmas"])
 
@@ -330,6 +425,18 @@ def get_seq_avg_times(seq, runs_per_version):
         avg_times.append(avg_time)
 
     return avg_times
+
+
+def split_train_test_data(train_ratio):
+    x = np.asarray(loop_features)
+    y = np.asarray(loop_targets)
+
+    split_point = int(len(loop_features) * train_ratio)
+
+    x_train, x_test = np.split(x, [split_point])
+    y_train, y_test = np.split(y, [split_point])
+
+    return x_train, x_test, y_train, y_test
 
 
 main()
