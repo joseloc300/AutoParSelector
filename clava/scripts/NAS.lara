@@ -14,7 +14,7 @@ import CustomExecutionTimeMetric;
 import CustomParallelize;
 import Utils;
 
-aspectdef Polybench
+aspectdef NAS
 	input
 		sourceFolder,
 		benchmarkFolders,
@@ -23,25 +23,21 @@ aspectdef Polybench
 
 	var start_time = performance.now();
 	var nRuns = 3;
-	var functionFilters = ["kernel_"];
 
-	var polybenchResults = {};
-	polybenchResults["runsPerVersion"] = nRuns;
-	polybenchResults["totalRuns"] = 0;
-	polybenchResults["totalVersions"] = 0;
-	polybenchResults["totalParLoops"] = 0;
-	polybenchResults["totalExecutionTimeInSec"] = 0;
-	polybenchResults["totalBenchmarks"] = 0;
-	polybenchResults["benchmarks"] = [];
+	var NASResults = {};
+	NASResults["runsPerVersion"] = nRuns;
+	NASResults["totalRuns"] = 0;
+	NASResults["totalVersions"] = 0;
+	NASResults["totalParLoops"] = 0;
+	NASResults["totalExecutionTimeInSec"] = 0;
+	NASResults["totalBenchmarks"] = 0;
+	NASResults["benchmarks"] = [];
 
-	var allFolders = ["datamining", "linear-algebra", "medley", "stencils"];
-	var excludedFiles = [];
+	var allFolders = ["BT", "CG", "EP", "FT", "IS", "LU", "MG", "SP", "UA"];
+	var excludedFiles = ["expected_output.c"];
 	var benchmarks = getSubFolders(sourceFolder, benchmarkFolders, allFolders, excludedFiles);
 
-	polybenchResults["totalBenchmarks"] = benchmarks.length;
-
-	var polybenchUtilsFolder = Io.getAbsolutePath(sourceFolder + "utilities/");
-	var polybenchCPath = Io.getPath(polybenchUtilsFolder, "polybench.c");
+	NASResults["totalBenchmarks"] = benchmarks.length;
 
 	println("Number of benchmarks found: " + benchmarks.length);
 	println("Processing benchmarks");
@@ -49,8 +45,8 @@ aspectdef Polybench
 		println("Processing: " + benchmark.folder);
 
 		Clava.pushAst();
-		var xtraCs = [polybenchCPath];
-		var xtraIncludeFolders = [polybenchUtilsFolder];
+		var xtraCs = [];
+		var xtraIncludeFolders = [];
 		rebuildCodeAst(benchmark, xtraCs, xtraIncludeFolders);
 		Clava.pushAst();
 
@@ -65,8 +61,8 @@ aspectdef Polybench
 		var loopToIndex = {};
 		var mainLoops = [];
 
-		var parLoops = getParLoops(functionFilters);
-		polybenchResults["totalParLoops"] += parLoops.length;
+		var parLoops = getParLoops();
+		NASResults["totalParLoops"] += parLoops.length;
 
 		var loopIterations = countLoopIterations(parLoops);
 		
@@ -74,8 +70,8 @@ aspectdef Polybench
 		addLoopInfo(parLoops, benchmarkResults, loopToIndex, mainLoops);
 		Clava.popAst();
 
-		polybenchResults["totalVersions"] += parLoopGroups.length;
-		polybenchResults["totalRuns"] += parLoopGroups.length * nRuns;
+		NASResults["totalVersions"] += parLoopGroups.length;
+		NASResults["totalRuns"] += parLoopGroups.length * nRuns;
 		var version = 0;
 		for (var loopGroup of parLoopGroups) {
 			Clava.pushAst();
@@ -98,12 +94,12 @@ aspectdef Polybench
 		addResults(benchmarkResults, measuresSeq, executorsSeq, false, null, null, null);
 		Clava.popAst();
 		
-		polybenchResults["benchmarks"].push(benchmarkResults);
+		NASResults["benchmarks"].push(benchmarkResults);
 		Io.writeJson(benchmark.outputFolder + "/results.json", benchmarkResults);
 	}
 	var end_time = performance.now();
-	polybenchResults["totalExecutionTimeInSec"] = (end_time - start_time) / 1000;
+	NASResults["totalExecutionTimeInSec"] = (end_time - start_time) / 1000;
 	
-	Io.writeJson("./results/polybench_" + now.toISOString() + ".json", polybenchResults);
+	Io.writeJson("./results/nas_" + now.toISOString() + ".json", NASResults);
 
 end

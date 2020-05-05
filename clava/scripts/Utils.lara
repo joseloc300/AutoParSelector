@@ -1,0 +1,494 @@
+import clava.autopar.Parallelize;
+import clava.autopar.ParallelizeLoop;
+import lara.Io;
+import lara.util.LocalFolder;
+import clava.ClavaJoinPoints;
+import lara.cmake.CMaker;
+import weaver.util.WeaverDataStore;
+import lara.code.Timer;
+import lara.metrics.ExecutionTimeMetric;
+import weaver.Query;
+import lara.Strings;
+
+function getLoopIndexes(loopGroup, loopToIndex) {
+	var indexes = [];
+	for(var loop of loopGroup) {
+		indexes.push(loopToIndex[loop.id]);
+	}
+
+	return indexes;
+}
+
+function countLoopIterations(loops) {
+	
+}
+
+function addLoopInfo(parLoops, benchmarkResults, loopToIndex, mainLoops) {
+	benchmarkResults["nLoops"] = parLoops.length;
+	benchmarkResults["loops"] = {};
+	var mainLoopIds = getLoopIds(mainLoops);
+	var index = 0;
+	for(var $loop of parLoops) {
+		var loopInstructionInfo = getInstructionInfo($loop);
+		
+		benchmarkResults["loops"][index] = {};
+		benchmarkResults["loops"][index]["id"] = $loop.id;
+		benchmarkResults["loops"][index]["origLine"] = $loop.line;
+		benchmarkResults["loops"][index]["iterations"] = $loop.iterationsExpr.code;
+		benchmarkResults["loops"][index]["nestedLevel"] = $loop.nestedLevel;
+		benchmarkResults["loops"][index]["isMainLoop"] = mainLoopIds.includes($loop.id);
+		benchmarkResults["loops"][index]["isInnermost"] = $loop.isInnermost;
+		benchmarkResults["loops"][index]["isOutermost"] = $loop.isOutermost;
+		benchmarkResults["loops"][index]["rank"] = Array.from($loop.rank);
+		benchmarkResults["loops"][index]["arithmeticInstructions"] = loopInstructionInfo["arithmeticInstructions"];
+		benchmarkResults["loops"][index]["logicInstructions"] = loopInstructionInfo["logicInstructions"];
+		benchmarkResults["loops"][index]["comparisonInstructions"] = loopInstructionInfo["comparisonInstructions"];
+		benchmarkResults["loops"][index]["assignmentInstructions"] = loopInstructionInfo["assignmentInstructions"];
+		benchmarkResults["loops"][index]["bitwiseInstructions"] = loopInstructionInfo["bitwiseInstructions"];
+		//benchmarkResults["loops"][index]["totalALUInstructions"] = loopInstructionInfo["totalALUInstructions"];
+		benchmarkResults["loops"][index]["ifInstructions"] = loopInstructionInfo["ifInstructions"];
+		benchmarkResults["loops"][index]["loopInstructions"] = loopInstructionInfo["loopInstructions"];
+		benchmarkResults["loops"][index]["varDeclarationInstructions"] = loopInstructionInfo["varDeclarationInstructions"];
+		benchmarkResults["loops"][index]["arrayAccessInstructions"] = loopInstructionInfo["arrayAccessInstructions"];
+		benchmarkResults["loops"][index]["totalInstructions"] = loopInstructionInfo["totalInstructions"];
+		benchmarkResults["loops"][index]["hasRecursiveFunctionCall"] = loopInstructionInfo["hasRecursiveFunctionCall"];
+
+		var pragmas = [];
+		for(var $pragma of $loop.pragmas) {
+			pragmas.push($pragma.code);
+		}
+		
+		benchmarkResults["loops"][index]["pragmas"] = pragmas;
+
+		loopToIndex[$loop.id] = index;
+		index++;
+	}
+}
+
+function getInstructionInfo($jp) {
+	var instructionInfo = {};
+
+	var arithmeticOperators = ["+", "-", "*", "/", "%", "++", "--"];
+	var logicOperators = ["||", "&&", "!"];
+	var comparisonOperators = ["==", "!=", "<", "<=", ">", ">="];
+	var assignmentOperators = ["=", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", ">>=", "<<="];
+	var bitwiseOperators = ["&", "|", "^", "~", "<<", ">>"];
+
+	var binaryOps = $jp.descendants("binaryOp");
+	var unaryOps = $jp.descendants("unaryOp");
+	var ifs = $jp.descendants("if");
+	var loops = $jp.descendants("loop");
+	var arrayAccesses = $jp.descendants("arrayAccess");
+	var varDeclarations = $jp.descendants("varDecl");
+
+	instructionInfo["arithmeticInstructions"] = 0;
+	instructionInfo["logicInstructions"] = 0;
+	instructionInfo["comparisonInstructions"] = 0;
+	instructionInfo["assignmentInstructions"] = 0;
+	instructionInfo["bitwiseInstructions"] = 0;
+	//instructionInfo["totalALUInstructions"] = 0;
+
+	for(var binaryOp of binaryOps) {
+		if(arithmeticOperators.contains(binaryOp.operator))
+			instructionInfo["arithmeticInstructions"] += 1;
+		else if(logicOperators.contains(binaryOp.operator))
+			instructionInfo["logicInstructions"] += 1;
+		else if(comparisonOperators.contains(binaryOp.operator))
+			instructionInfo["comparisonInstructions"] += 1;
+		else if(assignmentOperators.contains(binaryOp.operator))
+			instructionInfo["assignmentInstructions"] += 1;
+		else if(bitwiseOperators.contains(binaryOp.operator))
+			instructionInfo["bitwiseInstructions"] += 1;
+	}
+
+	for(var unaryOp of unaryOps) {
+		if(arithmeticOperators.contains(unaryOp.operator))
+			instructionInfo["arithmeticInstructions"] += 1;
+		else if(logicOperators.contains(unaryOp.operator))
+			instructionInfo["logicInstructions"] += 1;
+		else if(comparisonOperators.contains(unaryOp.operator))
+			instructionInfo["comparisonInstructions"] += 1;
+		else if(assignmentOperators.contains(unaryOp.operator))
+			instructionInfo["assignmentInstructions"] += 1;
+		else if(bitwiseOperators.contains(unaryOp.operator))
+			instructionInfo["bitwiseInstructions"] += 1;
+	}
+	
+	instructionInfo["ifInstructions"] = ifs.length;
+	instructionInfo["loopInstructions"] = loops.length;
+	instructionInfo["varDeclarationInstructions"] = varDeclarations.length;
+	instructionInfo["arrayAccessInstructions"] = arrayAccesses.length;
+
+	//check function calls
+	
+	instructionInfo["totalInstructions"] = instructionInfo["arithmeticInstructions"] + 
+		instructionInfo["logicInstructions"] + 
+		instructionInfo["comparisonInstructions"] + 
+		instructionInfo["assignmentInstructions"] + 
+		instructionInfo["bitwiseInstructions"] + 
+		instructionInfo["ifInstructions"] + 
+		instructionInfo["loopInstructions"] + 
+		instructionInfo["varDeclarationInstructions"] + 
+		instructionInfo["arrayAccessInstructions"];
+	instructionInfo["hasRecursiveFunctionCall"] = false;
+
+	return instructionInfo;
+}
+
+function getLoopIds($loops) {
+	var loopIds = [];
+
+	for (var $loop of $loops) {
+		loopIds.push($loop.id);
+	}
+
+	return loopIds;
+}
+
+function addResults(benchmarkResults, measures, executors, isPar, loopIndexes, version, mainLoopIndexes) {
+	var name = "";
+	var info = {};
+	if (isPar) {
+		name = "par";
+		benchmarkResults["par"]["nVersions"] += 1;
+		info["version"] = version;
+		info["parLoops"] = Array.from(loopIndexes);
+		info["mainLoop"] = 0;
+		info["measures"] = [];
+	}
+	else
+		name = "seq";
+
+	for(var measure of measures) {
+		var measureInfo = {};
+		measureInfo["loopIndex"] = parseInt(measure._prefix);
+		measureInfo["runs"] = [];
+		var runId = 0;
+		for(var executor of executors) {
+			var res = measure.report(executor);
+			var newRes = {};
+			newRes.value = res.getValue();
+			newRes.unit = res.getUnit();
+			if(isPar) {
+				measureInfo["runs"].push(newRes);
+			}
+			else {
+				measureInfo["runs"].push(newRes);
+			}
+			runId++;
+		}
+
+		if(isPar) {
+			info["measures"].push(measureInfo);
+			if(mainLoopIndexes.includes(parseInt(measure._prefix)))
+				info["mainLoop"] = parseInt(measure._prefix);
+		}
+		else {
+			benchmarkResults["seq"].push(measureInfo);
+		}
+	}
+
+	if(isPar) {
+		benchmarkResults["par"]["versions"].push(info);
+	}
+	
+}
+
+function getSubFolders(sourceFolder, benchmarkFolders, allFolders, excludedFiles) {
+	if (benchmarkFolders.length == 1 && benchmarkFolders[0] == "all")
+		benchmarkFolders = allFolders;
+
+	var benchmarks = [];
+	var foldersChecked = [];
+
+	for (var folder of benchmarkFolders) {
+		var folderPath = sourceFolder + folder;
+		
+		if(!Io.isFolder(folderPath)) {
+			println(folderPath + " is not a valid folder.");
+			continue;
+		}
+
+		var folder = new LocalFolder(folderPath);
+		var fileList = folder.getFileList();
+
+		for (var file of fileList) {
+			var fileString = file.toString();
+			if(!fileString.endsWith(".c"))
+				continue;
+
+			var skipFile = false;
+			for(var excludedFile of excludedFiles) {
+				if(fileString.endsWith(excludedFile)) {
+					skipFile = true;
+					break;
+				}
+			}
+
+			if(skipFile)
+				continue;
+
+			var benchmark = createBenchmarkObj(fileString);
+			if(foldersChecked.contains(benchmark.folder))
+				continue;
+
+			benchmarks.push(benchmark);
+			foldersChecked.push(benchmark.folder);
+
+		}
+	}
+	return benchmarks;
+}
+
+function createBenchmarkObj(fileString) {
+	var benchmark = new Object();
+
+	var lastSlash = fileString.lastIndexOf("/");
+	var benchGroupNameIndex = fileString.indexOf("/sources/") + 9;
+	benchmark.c = Io.getAbsolutePath(fileString);
+	benchmark.folder = Io.getAbsolutePath(fileString.slice(0, lastSlash));
+	benchmark.outputFolder = Io.getAbsolutePath("./outputs/" + fileString.slice(benchGroupNameIndex, lastSlash));
+	benchmark.name = Io.removeExtension(fileString.substring(lastSlash + 1));
+
+	return benchmark;
+}
+
+function rebuildCodeAst(benchmark, xtraCs, xtraIncludeFolders) {
+	var includesFolders = Array.from(xtraIncludeFolders);
+	includeFolders.push(benchmark.folder);
+
+	var dataStore = Clava.getData();
+	dataStore.setUserIncludes(polybenchUtilsFolder, benchmark.folder);
+
+	var cs = Array.from(xtraCs);
+	cs.push(benchmark.c);
+	
+	for(var c of cs) {
+		var clavaJPFile = ClavaJoinPoints.file(c);
+		Clava.addFile(clavaJPFile);
+	}
+
+	Clava.rebuild();
+}
+
+function addTimerSeq(parallelLoopIds, loopToIndex) {
+
+	var measures = [];
+
+	for(var result of Query.search('function').search('loop').chain()) {
+		if(!parallelLoopIds.includes(result["loop"].id)) {
+			continue;
+		}
+
+		var measure = new CustomExecutionTimeMetric(loopToIndex[result["loop"].id].toString());
+		measures.push(measure);
+		
+		measure.instrument(result["loop"]);
+	}
+
+	return measures;
+}
+
+function addTimerMainLoop(mainLoopId, loopToIndex) {
+	var measure;
+	for(var result of Query.search('function').search('loop').chain()) {
+		if(result["loop"].id != mainLoopId) {
+			continue;
+		}
+
+		measure = new CustomExecutionTimeMetric(loopToIndex[result["loop"].id].toString());	
+		measure.instrument(result["loop"], undefined, true);
+		break;
+	}
+	return measure;
+}
+
+function addTimerPar($loopGroup, loopToIndex, mainLoops) {
+	var measures = [];
+	var loopGroupIds = getLoopIds($loopGroup);
+	var mainLoopIds = getLoopIds(mainLoops);
+	var foundMainLoop = false;
+	
+	for(var result of Query.search('pragma')) {
+		if(result.name != "omp")
+			continue;
+
+		var pragmaLoop = result.target;
+		if(!loopGroupIds.includes(pragmaLoop.id))
+			continue;
+
+		var measure = new CustomExecutionTimeMetric(loopToIndex[result.target.id].toString());
+		measures.push(measure);
+
+		var addExitStatement = false;
+		if(mainLoopIds.includes(result.target.id)) {
+			addExitStatement = true;
+			foundMainLoop = true;
+		}
+		
+		measure.instrument(result, result.target, addExitStatement);
+		
+	}
+
+	if(!foundMainLoop) {
+		var mainLoopMeasure = findAndTimeMainLoop($loopGroup[0], loopToIndex, mainLoops);
+		measures.push(mainLoopMeasure);
+	}
+
+	return measures;
+}
+
+function findAndTimeMainLoop($loop, loopToIndex, $mainLoops) {
+	var mainLoopMeasure;
+	for(var $mainLoop of $mainLoops) {
+		if(checkRankDescendant($loop.rank, $mainLoop.rank)) {
+			mainLoopMeasure = addTimerMainLoop($mainLoop.id, loopToIndex);
+		}
+	}
+
+	return mainLoopMeasure;
+}
+
+/**
+checks if loop with the rank loopRank0 is descendant from the loop with the rank loopRank1
+@param loopRank0 int[], rank from loop we intend to check
+@param loopRank1 int[], rank from loop we intend to check against
+@return true if loop with the rank loopRank0 is descendant from the loop with the rank loopRank1
+**/
+function checkRankDescendant(loopRank0, loopRank1) {
+	if(loopRank0.length <= loopRank1.length)
+		return false;
+	
+	for(var i = 0; i < loopRank1.length; i++) {
+		if(loopRank1[i] != loopRank0[i])
+			return false;
+	}
+
+	return true;
+}
+
+function getParLoopGroups($parLoops, mainLoops) {
+	var $loopGroups = [];
+	var processedIds = [];
+	var parLoopIds = getLoopIds($parLoops);
+	var currLvl = 0;
+
+	while(processedIds.length < $parLoops.length) {
+
+		for(var $loop of $parLoops) {
+			if($loop.nestedLevel != currLvl || processedIds.includes($loop.id))
+				continue;
+		
+			var currentGroup = [];
+			currentGroup.push([$loop]);
+			processedIds.push($loop.id);
+			mainLoops.push($loop);
+			
+			var $loopDescendants = $loop.descendants("loop");
+			for(var $descendant of $loopDescendants) {
+				if(!parLoopIds.includes($descendant.id)) {
+					continue;
+				}
+
+				processedIds.push($descendant.id);
+				var toAdd = [];
+				for(var loops of currentGroup) {
+					var newLoops = Array.from(loops);
+					newLoops.push($descendant);
+					toAdd.push(newLoops);
+				}
+
+				for(var elem of toAdd) {
+					currentGroup.push(elem);
+				}
+
+				currentGroup.push([$descendant]);
+			}
+	
+			for(var elem of currentGroup) {
+				$loopGroups.push(elem);
+			}
+			
+		}
+
+		currLvl += 1;
+		
+	}
+
+	return $loopGroups;
+}
+
+function getParLoops(functionFilters) {
+	var loops = [];
+
+	for(var result of Query.search('function').search('loop').chain()) {
+		// Only time loops inside filtered functions
+		var skip_loop = true;
+		for(var functionFilter of functionFilters) {
+			if(result["function"].name.startsWith(functionFilter)) {
+				skip_loop = false;
+				break;
+			}
+		}
+
+		if(skip_loop)
+			continue;
+		
+		loops.push(result["loop"]);
+	}
+
+	Parallelize.forLoops(loops);
+
+	var pragmas = Parallelize.getForLoopsPragmas(loops);
+	var astIds = Object.keys(pragmas["parallelLoops"]);
+
+	var parLoops = [];
+	for(var loop of loops) {
+		if(astIds.includes(loop.astId)) {
+			parLoops.push(loop);
+		}
+	}
+
+	return parLoops;
+}
+
+function buildAndRun(benchmark, compoundId, nRuns, isPar) {
+	var subFolder = "";
+
+	var compoundIdStr = "";
+	
+	if(isPar) {
+		compoundIdStr = String(compoundId);
+		compoundIdStr = Strings.replacer(compoundIdStr, / /g, "_");
+		subFolder = "/par/" + compoundIdStr;
+	}
+	else
+		subFolder = "/seq";
+	
+	var folder = Io.mkdir(benchmark.outputFolder + subFolder);
+	var buildFolder = Io.mkdir(benchmark.outputFolder + subFolder + "/build");
+	Clava.writeCode(folder);
+
+	var cmaker = new CMaker(benchmark.name);
+
+	cmaker.addCurrentAst();
+	cmaker.addLibs("m");
+	cmaker.addFlags("-O3");	
+	if(isPar)
+		cmaker.addFlags("-fopenmp");
+
+	var exe = cmaker.build(folder, buildFolder);
+
+	var executors = [];
+	var i;
+	
+	for(i = 0; i < nRuns; i++) {
+		var executor = new ProcessExecutor();	
+		executor.setPrintToConsole(false);
+		var exeOutput = executor.execute(exe.getAbsolutePath());
+		executors.push(executor);
+	}
+	
+
+	return executors;
+}
