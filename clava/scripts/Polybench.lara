@@ -11,99 +11,114 @@ import weaver.Query;
 import lara.Strings;
 
 import CustomExecutionTimeMetric;
-import CustomParallelize;
+//import CustomParallelize;
 import Utils;
 
 aspectdef Polybench
 	input
 		sourceFolder,
 		benchmarkFolders,
-		now
+		now,
+		readCache
 	end
 
+	var benchGroupName = "polybench-c-3.2";
 	var start_time = performance.now();
 	var nRuns = 3;
 	var functionFilters = ["kernel_"];
+	var problemSizeFlags3_2 = [/*"-DMINI_DATASET", "-DSMALL_DATASET", */"-DSTANDARD_DATASET", "-DLARGE_DATASET", "-DEXTRALARGE_DATASET"];
+	//var problemSizeFlags3_2 = ["-DMINI_DATASET", "-DSMALL_DATASET", "-DSTANDARD_DATASET", "-DLARGE_DATASET", "-DEXTRALARGE_DATASET"];
+	var problemSizeFlags4_2 = ["-DMINI_DATASET", "-DSMALL_DATASET", "-DMEDIUM_DATASET", "-DLARGE_DATASET", "-DEXTRALARGE_DATASET"];
 
-	var polybenchResults = {};
-	polybenchResults["runsPerVersion"] = nRuns;
-	polybenchResults["totalRuns"] = 0;
-	polybenchResults["totalVersions"] = 0;
-	polybenchResults["totalParLoops"] = 0;
-	polybenchResults["totalExecutionTimeInSec"] = 0;
-	polybenchResults["totalBenchmarks"] = 0;
-	polybenchResults["benchmarks"] = [];
+	var polybenchResults = createBenchGroupResultsObj(nRuns);
 
 	var allFolders = ["datamining", "linear-algebra", "medley", "stencils"];
 	var excludedFiles = [];
-	var benchmarks = getSubFolders(sourceFolder, benchmarkFolders, allFolders, excludedFiles);
+	var excludedFolders = ["fdtd-2d"];
+	var benchmarks = getSubFolders(sourceFolder, benchmarkFolders, allFolders, excludedFiles, excludedFolders);
 
-	polybenchResults["totalBenchmarks"] = benchmarks.length;
+	polybenchResults["totalBenchmarks"] = benchmarks.length * problemSizeFlags3_2.length;
 
 	var polybenchUtilsFolder = Io.getAbsolutePath(sourceFolder + "utilities/");
 	var polybenchCPath = Io.getPath(polybenchUtilsFolder, "polybench.c");
+
+	var xtraCs = [polybenchCPath];
+	var xtraIncludeFolders = [polybenchUtilsFolder];
 
 	println("Number of benchmarks found: " + benchmarks.length);
 	println("Processing benchmarks");
 	for (var benchmark of benchmarks) {
 		println("Processing: " + benchmark.folder);
 
-		Clava.pushAst();
-		var xtraCs = [polybenchCPath];
-		var xtraIncludeFolders = [polybenchUtilsFolder];
-		rebuildCodeAst(benchmark, xtraCs, xtraIncludeFolders);
-		Clava.pushAst();
+		//Clava.pushAst();
 
-		var benchmarkResults = {};
-		benchmarkResults["benchmark"] = benchmark.folder;
+		for(var problemSizeFlag of problemSizeFlags3_2) {
+			println("Current problem size flag = " + problemSizeFlag);
 		
-		benchmarkResults["par"] = {};
-		benchmarkResults["par"]["nVersions"] = 0;
-		benchmarkResults["par"]["versions"] = [];
-		benchmarkResults["seq"] = [];
-
-		var loopToIndex = {};
-		var mainLoops = [];
-
-		var parLoops = getParLoops(functionFilters);
-		polybenchResults["totalParLoops"] += parLoops.length;
-
-		var loopIterations = countLoopIterations(parLoops);
-		
-		var parLoopGroups = getParLoopGroups(parLoops, mainLoops);
-		addLoopInfo(parLoops, benchmarkResults, loopToIndex, mainLoops);
-		Clava.popAst();
-
-		polybenchResults["totalVersions"] += parLoopGroups.length;
-		polybenchResults["totalRuns"] += parLoopGroups.length * nRuns;
-		var version = 0;
-		for (var loopGroup of parLoopGroups) {
 			Clava.pushAst();
+			var flags = [problemSizeFlag];
+			if(problemSizeFlag == "-DSTANDARD_DATASET") {
+				flags = [];
+			}
+			rebuildCodeAst(benchmark, xtraCs, xtraIncludeFolders, flags);
 
-			CustomParallelize.forLoops(loopGroup);
+			var parLoops;
 
-			var measuresPar = addTimerPar(loopGroup, loopToIndex, mainLoops);
-			var executorsPar = buildAndRun(benchmark, version, nRuns, true);
-			var loopIndexes = getLoopIndexes(loopGroup, loopToIndex);
-			var mainLoopIndexes = getLoopIndexes(mainLoops, loopToIndex);
-			addResults(benchmarkResults, measuresPar, executorsPar, true, loopIndexes, version, mainLoopIndexes);
-			version++;
+			if(readCache) {
+				parLoops = getParLoopsFromCache(benchmark, benchGroupName, problemSizeFlag);
+			}
+			else {
+				Clava.pushAst();
+				parLoops = getParLoops(functionFilters);
+				Clava.popAst(); //NEW
+				writeParLoopsToCache(benchmark, benchGroupName, problemSizeFlag, parLoops);
+			}
+			//Clava.pushAst();
+	
+			var benchmarkResults = createBenchResultsObj(benchmark, problemSizeFlag);
+		
+			polybenchResults["totalParLoops"] += Object.keys(parLoops).length;
+	
+			countLoopIterations(parLoops);
+			
+			var parLoopGroups = getParLoopGroups(parLoops);
+			addLoopInfo(parLoops, benchmarkResults);
+			//Clava.popAst();
+	
+			polybenchResults["totalVersions"] += parLoopGroups.length;
+			polybenchResults["totalRuns"] += parLoopGroups.length * nRuns;
+			
+			var version = 0;
+			for (var loopGroup of parLoopGroups) {
+				Clava.pushAst();
+	
+				//Parallelize.forLoops(loopGroup);
+				addPragmas(loopGroup, parLoops);
+	
+				var measuresPar = addTimerPar(loopGroup, parLoops);
+				var executorsPar = buildAndRun(benchmark, version, nRuns, true, problemSizeFlag);
+				addResults(benchmarkResults, measuresPar, executorsPar, version, loopGroup, parLoops);
+				version++;
+				Clava.popAst();
+			}
+			
+			var parLoopIds = Object.keys(parLoops);
+	
+			var measuresSeq = addTimerSeq(parLoopIds, parLoops);
+			var executorsSeq = buildAndRun(benchmark, version, nRuns, false, problemSizeFlag);
+			
+			version = -1;
+			addResults(benchmarkResults, measuresSeq, executorsSeq, version, loopGroup, parLoops);
 			Clava.popAst();
+			
+			polybenchResults["benchmarks"].push(benchmarkResults);
+			Io.writeJson(benchmark.outputFolder + problemSizeFlag + "/results.json", benchmarkResults);
 		}
-		
-		var parLoopIds = getLoopIds(parLoops);
-
-		var measuresSeq = addTimerSeq(parLoopIds, loopToIndex);
-		var executorsSeq = buildAndRun(benchmark, version, nRuns, false);	
-		addResults(benchmarkResults, measuresSeq, executorsSeq, false, null, null, null);
-		Clava.popAst();
-		
-		polybenchResults["benchmarks"].push(benchmarkResults);
-		Io.writeJson(benchmark.outputFolder + "/results.json", benchmarkResults);
+		//Clava.popAst();	
 	}
 	var end_time = performance.now();
 	polybenchResults["totalExecutionTimeInSec"] = (end_time - start_time) / 1000;
 	
-	Io.writeJson("./results/polybench_" + now.toISOString() + ".json", polybenchResults);
+	Io.writeJson("./results/" + benchGroupName + "_" + now.toISOString() + ".json", polybenchResults);
 
 end

@@ -18,11 +18,13 @@ aspectdef NAS
 	input
 		sourceFolder,
 		benchmarkFolders,
-		now
+		now,
+		readCache
 	end
 
 	var start_time = performance.now();
 	var nRuns = 3;
+	var functionFilters = [];
 
 	var NASResults = {};
 	NASResults["runsPerVersion"] = nRuns;
@@ -35,7 +37,8 @@ aspectdef NAS
 
 	var allFolders = ["BT", "CG", "EP", "FT", "IS", "LU", "MG", "SP", "UA"];
 	var excludedFiles = ["expected_output.c"];
-	var benchmarks = getSubFolders(sourceFolder, benchmarkFolders, allFolders, excludedFiles);
+	var excludedFolders = [];
+	var benchmarks = getSubFolders(sourceFolder, benchmarkFolders, allFolders, excludedFiles, excludedFolders);
 
 	NASResults["totalBenchmarks"] = benchmarks.length;
 
@@ -61,8 +64,8 @@ aspectdef NAS
 		var loopToIndex = {};
 		var mainLoops = [];
 
-		var parLoops = getParLoops();
-		NASResults["totalParLoops"] += parLoops.length;
+		var parLoops = getParLoops(functionFilters);
+		NASResults["totalParLoops"] += Object.keys(parLoops).length;
 
 		var loopIterations = countLoopIterations(parLoops);
 		
@@ -87,7 +90,7 @@ aspectdef NAS
 			Clava.popAst();
 		}
 		
-		var parLoopIds = getLoopIds(parLoops);
+		var parLoopIds = Object.keys(parLoops);
 
 		var measuresSeq = addTimerSeq(parLoopIds, loopToIndex);
 		var executorsSeq = buildAndRun(benchmark, version, nRuns, false);	

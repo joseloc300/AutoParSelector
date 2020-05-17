@@ -1,5 +1,4 @@
 import clava.autopar.Parallelize;
-import clava.autopar.ParallelizeLoop;
 import lara.Io;
 import lara.util.LocalFolder;
 import clava.ClavaJoinPoints;
@@ -10,10 +9,10 @@ import lara.metrics.ExecutionTimeMetric;
 import weaver.Query;
 import lara.Strings;
 
-function getLoopIndexes(loopGroup, loopToIndex) {
+function getLoopIndexes(loopGroup, parLoops) {
 	var indexes = [];
-	for(var loop of loopGroup) {
-		indexes.push(loopToIndex[loop.id]);
+	for(var loopId of loopGroup) {
+		indexes.push(parLoops[loopId]["index"]);
 	}
 
 	return indexes;
@@ -23,12 +22,16 @@ function countLoopIterations(loops) {
 	
 }
 
-function addLoopInfo(parLoops, benchmarkResults, loopToIndex, mainLoops) {
+function addLoopInfo(parLoops, benchmarkResults) {
 	benchmarkResults["nLoops"] = parLoops.length;
 	benchmarkResults["loops"] = {};
-	var mainLoopIds = getLoopIds(mainLoops);
+	var parLoopIds = Object.keys(parLoops);
+	var $loopJps = getLoopsFromIds(parLoopIds);
+	
 	var index = 0;
-	for(var $loop of parLoops) {
+	for(var loopId of parLoopIds) {
+		var $loop = $loopJps[loopId];
+		
 		var loopInstructionInfo = getInstructionInfo($loop);
 		
 		benchmarkResults["loops"][index] = {};
@@ -36,7 +39,7 @@ function addLoopInfo(parLoops, benchmarkResults, loopToIndex, mainLoops) {
 		benchmarkResults["loops"][index]["origLine"] = $loop.line;
 		benchmarkResults["loops"][index]["iterations"] = $loop.iterationsExpr.code;
 		benchmarkResults["loops"][index]["nestedLevel"] = $loop.nestedLevel;
-		benchmarkResults["loops"][index]["isMainLoop"] = mainLoopIds.includes($loop.id);
+		benchmarkResults["loops"][index]["isMainLoop"] = parLoops[loopId]["isMainLoop"];
 		benchmarkResults["loops"][index]["isInnermost"] = $loop.isInnermost;
 		benchmarkResults["loops"][index]["isOutermost"] = $loop.isOutermost;
 		benchmarkResults["loops"][index]["rank"] = Array.from($loop.rank);
@@ -51,23 +54,94 @@ function addLoopInfo(parLoops, benchmarkResults, loopToIndex, mainLoops) {
 		benchmarkResults["loops"][index]["varDeclarationInstructions"] = loopInstructionInfo["varDeclarationInstructions"];
 		benchmarkResults["loops"][index]["arrayAccessInstructions"] = loopInstructionInfo["arrayAccessInstructions"];
 		benchmarkResults["loops"][index]["totalInstructions"] = loopInstructionInfo["totalInstructions"];
+		benchmarkResults["loops"][index]["level0FunctionCalls"] = loopInstructionInfo["level0FunctionCalls"];
+		benchmarkResults["loops"][index]["totalFunctionCalls"] = loopInstructionInfo["totalFunctionCalls"];
 		benchmarkResults["loops"][index]["hasRecursiveFunctionCall"] = loopInstructionInfo["hasRecursiveFunctionCall"];
+		benchmarkResults["loops"][index]["pragma"] = parLoops[loopId]["pragma"];;
 
-		var pragmas = [];
-		for(var $pragma of $loop.pragmas) {
-			pragmas.push($pragma.code);
-		}
-		
-		benchmarkResults["loops"][index]["pragmas"] = pragmas;
-
-		loopToIndex[$loop.id] = index;
+		parLoops[loopId]["index"] = index;
 		index++;
 	}
 }
 
-function getInstructionInfo($jp) {
+function getInstructionInfo($loop) {
+	var instructionInfo = createInstructionInfoObj();
+	instructionAnalyser($loop, instructionInfo);
+
+	var functionInstructionInfo = createInstructionInfoObj();
+	functionAnalyser($loop, functionInstructionInfo);
+
+	joinInstructionInfoObjs(instructionInfo, functionInstructionInfo);
+
+	return instructionInfo;
+}
+
+function createInstructionInfoObj() {
 	var instructionInfo = {};
 
+	instructionInfo["arithmeticInstructions"] = 0;
+	instructionInfo["logicInstructions"] = 0;
+	instructionInfo["comparisonInstructions"] = 0;
+	instructionInfo["assignmentInstructions"] = 0;
+	instructionInfo["bitwiseInstructions"] = 0;
+	instructionInfo["ifInstructions"] = 0;
+	instructionInfo["loopInstructions"] = 0;
+	instructionInfo["varDeclarationInstructions"] = 0;
+	instructionInfo["arrayAccessInstructions"] = 0;
+	instructionInfo["level0FunctionCalls"] = 0;
+	instructionInfo["totalFunctionCalls"] = 0;
+	instructionInfo["totalInstructions"] = 0;
+	instructionInfo["hasRecursiveFunctionCall"] = false;
+
+	return instructionInfo;
+}
+
+function functionAnalyser($loop, functionInstructionInfo) {
+	var functionCalls = $loop.descendants("call");
+
+	for(var functionCall of functionCalls) {
+		functionInstructionInfo["level0FunctionCalls"] += 1;
+		functionInstructionInfo["totalFunctionCalls"] += 1;
+	
+		var $function = functionCall.function;
+		var $functionDefinition = $function.definitionJp;
+		var functionId = $function.id;
+
+		var callStack = [];
+		//do i need to check return value here?
+		functionAnalyserAux($functionDefinition, functionId, callStack, functionInstructionInfo);	
+	}
+}
+
+function functionAnalyserAux($functionDefinition, functionId, callStack, functionInstructionInfo) {
+	if(callStack.contains(functionId)) {
+		functionInstructionInfo["hasRecursiveFunctionCall"] = true;
+		return -1;
+	}
+
+	instructionAnalyser($functionDefinition, functionInstructionInfo);
+
+	var functionCalls = $functionDefinition.descendants("call");
+
+	for(var functionCall of functionCalls) {
+		functionInstructionInfo["totalFunctionCalls"] += 1;
+	
+		var $function = functionCall.function;
+		var $functionDefinition = $function.definitionJp;
+		var functionId = $function.id;
+
+		var callStack = Array.from(callStack);
+		callStack.push(functionId);
+		//do i need to check return value here?
+		if(functionAnalyserAux($functionDefinition, functionId, callStack, functionInstructionInfo) != 0) {
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+function instructionAnalyser($jp, instructionInfo) {
 	var arithmeticOperators = ["+", "-", "*", "/", "%", "++", "--"];
 	var logicOperators = ["||", "&&", "!"];
 	var comparisonOperators = ["==", "!=", "<", "<=", ">", ">="];
@@ -80,13 +154,6 @@ function getInstructionInfo($jp) {
 	var loops = $jp.descendants("loop");
 	var arrayAccesses = $jp.descendants("arrayAccess");
 	var varDeclarations = $jp.descendants("varDecl");
-
-	instructionInfo["arithmeticInstructions"] = 0;
-	instructionInfo["logicInstructions"] = 0;
-	instructionInfo["comparisonInstructions"] = 0;
-	instructionInfo["assignmentInstructions"] = 0;
-	instructionInfo["bitwiseInstructions"] = 0;
-	//instructionInfo["totalALUInstructions"] = 0;
 
 	for(var binaryOp of binaryOps) {
 		if(arithmeticOperators.contains(binaryOp.operator))
@@ -114,14 +181,12 @@ function getInstructionInfo($jp) {
 			instructionInfo["bitwiseInstructions"] += 1;
 	}
 	
-	instructionInfo["ifInstructions"] = ifs.length;
-	instructionInfo["loopInstructions"] = loops.length;
-	instructionInfo["varDeclarationInstructions"] = varDeclarations.length;
-	instructionInfo["arrayAccessInstructions"] = arrayAccesses.length;
+	instructionInfo["ifInstructions"] += ifs.length;
+	instructionInfo["loopInstructions"] += loops.length;
+	instructionInfo["varDeclarationInstructions"] += varDeclarations.length;
+	instructionInfo["arrayAccessInstructions"] += arrayAccesses.length;
 
-	//check function calls
-	
-	instructionInfo["totalInstructions"] = instructionInfo["arithmeticInstructions"] + 
+	instructionInfo["totalInstructions"] += instructionInfo["arithmeticInstructions"] + 
 		instructionInfo["logicInstructions"] + 
 		instructionInfo["comparisonInstructions"] + 
 		instructionInfo["assignmentInstructions"] + 
@@ -130,9 +195,28 @@ function getInstructionInfo($jp) {
 		instructionInfo["loopInstructions"] + 
 		instructionInfo["varDeclarationInstructions"] + 
 		instructionInfo["arrayAccessInstructions"];
-	instructionInfo["hasRecursiveFunctionCall"] = false;
+}
 
-	return instructionInfo;
+function joinInstructionInfoObjs(instructionInfo, functionInstructionInfo) {
+	instructionInfo["level0FunctionCalls"] = functionInstructionInfo["level0FunctionCalls"];
+	instructionInfo["totalFunctionCalls"] = functionInstructionInfo["level0FunctionCalls"];
+	instructionInfo["hasRecursiveFunctionCall"] = functionInstructionInfo["hasRecursiveFunctionCall"];
+
+	if(functionInstructionInfo["hasRecursiveFunctionCall"]) {
+		return;
+	}
+
+	instructionInfo["arithmeticInstructions"] += functionInstructionInfo["arithmeticInstructions"];
+	instructionInfo["logicInstructions"] += functionInstructionInfo["logicInstructions"];
+	instructionInfo["comparisonInstructions"] += functionInstructionInfo["comparisonInstructions"];
+	instructionInfo["assignmentInstructions"] += functionInstructionInfo["assignmentInstructions"];
+	instructionInfo["bitwiseInstructions"] += functionInstructionInfo["bitwiseInstructions"];
+	instructionInfo["ifInstructions"] += functionInstructionInfo["ifInstructions"];
+	instructionInfo["loopInstructions"] += functionInstructionInfo["loopInstructions"];
+	instructionInfo["varDeclarationInstructions"] += functionInstructionInfo["varDeclarationInstructions"];
+	instructionInfo["arrayAccessInstructions"] += functionInstructionInfo["arrayAccessInstructions"];
+	instructionInfo["totalInstructions"] += functionInstructionInfo["totalInstructions"];
+	
 }
 
 function getLoopIds($loops) {
@@ -145,7 +229,14 @@ function getLoopIds($loops) {
 	return loopIds;
 }
 
-function addResults(benchmarkResults, measures, executors, isPar, loopIndexes, version, mainLoopIndexes) {
+function addResults(benchmarkResults, measures, executors, version, loopGroup, parLoops) {
+	var isPar = version >= 0;
+	
+	//var loopIds = Object.keys(parLoops);
+	var loopIndexes = getLoopIndexes(loopGroup, parLoops);
+	var mainLoopIds = getMainLoopIds(parLoops);
+	var mainLoopIndexes = getLoopIndexes(mainLoopIds, parLoops);
+
 	var name = "";
 	var info = {};
 	if (isPar) {
@@ -169,12 +260,7 @@ function addResults(benchmarkResults, measures, executors, isPar, loopIndexes, v
 			var newRes = {};
 			newRes.value = res.getValue();
 			newRes.unit = res.getUnit();
-			if(isPar) {
-				measureInfo["runs"].push(newRes);
-			}
-			else {
-				measureInfo["runs"].push(newRes);
-			}
+			measureInfo["runs"].push(newRes);
 			runId++;
 		}
 
@@ -194,7 +280,7 @@ function addResults(benchmarkResults, measures, executors, isPar, loopIndexes, v
 	
 }
 
-function getSubFolders(sourceFolder, benchmarkFolders, allFolders, excludedFiles) {
+function getSubFolders(sourceFolder, benchmarkFolders, allFolders, excludedFiles, excludedFolders) {
 	if (benchmarkFolders.length == 1 && benchmarkFolders[0] == "all")
 		benchmarkFolders = allFolders;
 
@@ -229,6 +315,16 @@ function getSubFolders(sourceFolder, benchmarkFolders, allFolders, excludedFiles
 				continue;
 
 			var benchmark = createBenchmarkObj(fileString);
+
+			for(excludedFolder of excludedFolders) {
+				if(benchmark.folder.endsWith(excludedFolder))
+				skipFile = true;
+			}
+
+			if(skipFile)
+				continue;
+	
+			
 			if(foldersChecked.contains(benchmark.folder))
 				continue;
 
@@ -253,12 +349,14 @@ function createBenchmarkObj(fileString) {
 	return benchmark;
 }
 
-function rebuildCodeAst(benchmark, xtraCs, xtraIncludeFolders) {
-	var includesFolders = Array.from(xtraIncludeFolders);
+function rebuildCodeAst(benchmark, xtraCs, xtraIncludeFolders, flags) {
+	var includeFolders = Array.from(xtraIncludeFolders);
 	includeFolders.push(benchmark.folder);
 
 	var dataStore = Clava.getData();
-	dataStore.setUserIncludes(polybenchUtilsFolder, benchmark.folder);
+	dataStore.setUserIncludes(includeFolders);
+	var flagString = concatFlags(flags);
+	dataStore.setFlags(flagString);
 
 	var cs = Array.from(xtraCs);
 	cs.push(benchmark.c);
@@ -271,7 +369,7 @@ function rebuildCodeAst(benchmark, xtraCs, xtraIncludeFolders) {
 	Clava.rebuild();
 }
 
-function addTimerSeq(parallelLoopIds, loopToIndex) {
+function addTimerSeq(parallelLoopIds, parLoops) {
 
 	var measures = [];
 
@@ -280,7 +378,7 @@ function addTimerSeq(parallelLoopIds, loopToIndex) {
 			continue;
 		}
 
-		var measure = new CustomExecutionTimeMetric(loopToIndex[result["loop"].id].toString());
+		var measure = new CustomExecutionTimeMetric(parLoops[result["loop"].id]["index"].toString());
 		measures.push(measure);
 		
 		measure.instrument(result["loop"]);
@@ -289,60 +387,73 @@ function addTimerSeq(parallelLoopIds, loopToIndex) {
 	return measures;
 }
 
-function addTimerMainLoop(mainLoopId, loopToIndex) {
+function addTimerMainLoop(mainLoopId, mainLoopIndex) {
 	var measure;
 	for(var result of Query.search('function').search('loop').chain()) {
 		if(result["loop"].id != mainLoopId) {
 			continue;
 		}
 
-		measure = new CustomExecutionTimeMetric(loopToIndex[result["loop"].id].toString());	
+		measure = new CustomExecutionTimeMetric(mainLoopIndex);	
 		measure.instrument(result["loop"], undefined, true);
 		break;
 	}
 	return measure;
 }
 
-function addTimerPar($loopGroup, loopToIndex, mainLoops) {
+function addTimerPar(loopGroup, parLoops) {
 	var measures = [];
-	var loopGroupIds = getLoopIds($loopGroup);
-	var mainLoopIds = getLoopIds(mainLoops);
+	//var loopGroupIds = getLoopIds($loopGroup);
+	var $loopJps = getLoopsFromIds(loopGroup);
+	var mainLoopIds = getMainLoopIds(parLoops);
 	var foundMainLoop = false;
-	
+
 	for(var result of Query.search('pragma')) {
 		if(result.name != "omp")
 			continue;
 
-		var pragmaLoop = result.target;
-		if(!loopGroupIds.includes(pragmaLoop.id))
+		var $pragmaLoop = result.target;
+		if(!loopGroup.includes($pragmaLoop.id))
 			continue;
-
-		var measure = new CustomExecutionTimeMetric(loopToIndex[result.target.id].toString());
+		
+		var measurePrefix = parLoops[$pragmaLoop.id]["index"].toString();
+		var measure = new CustomExecutionTimeMetric(measurePrefix);
 		measures.push(measure);
 
 		var addExitStatement = false;
-		if(mainLoopIds.includes(result.target.id)) {
+		if(mainLoopIds.includes($pragmaLoop.id)) {
 			addExitStatement = true;
 			foundMainLoop = true;
 		}
 		
-		measure.instrument(result, result.target, addExitStatement);
+		measure.instrument(result, $pragmaLoop, addExitStatement);
 		
 	}
 
 	if(!foundMainLoop) {
-		var mainLoopMeasure = findAndTimeMainLoop($loopGroup[0], loopToIndex, mainLoops);
+		var subMainLoopId = getSubMainLoopId(loopGroup, parLoops);
+		var mainLoopMeasure = findAndTimeMainLoop(subMainLoopId, parLoops, mainLoopIds);
 		measures.push(mainLoopMeasure);
 	}
+
+	
+	//println("measures.length = " + measures.length);
+	//println("measure[0]._prefix = " + measures[0]._prefix);
+
+	//exit(0);
 
 	return measures;
 }
 
-function findAndTimeMainLoop($loop, loopToIndex, $mainLoops) {
+function findAndTimeMainLoop(subMainLoopId, parLoops, mainLoopIds) {
+	var $subMainLoop = getLoopsFromIds([subMainLoopId])[subMainLoopId];
+	var $mainLoopJps = getLoopsFromIds(mainLoopIds);
 	var mainLoopMeasure;
-	for(var $mainLoop of $mainLoops) {
-		if(checkRankDescendant($loop.rank, $mainLoop.rank)) {
-			mainLoopMeasure = addTimerMainLoop($mainLoop.id, loopToIndex);
+	for(var mainLoopId of mainLoopIds) {
+		var $mainLoop = $mainLoopJps[mainLoopId];
+		if(checkRankDescendant($subMainLoop.rank, $mainLoop.rank)) {
+			var mainLoopIndex = parLoops[$mainLoop.id]["index"].toString();
+			mainLoopMeasure = addTimerMainLoop($mainLoop.id, mainLoopIndex);
 		}
 	}
 
@@ -367,22 +478,25 @@ function checkRankDescendant(loopRank0, loopRank1) {
 	return true;
 }
 
-function getParLoopGroups($parLoops, mainLoops) {
-	var $loopGroups = [];
+function getParLoopGroups(parLoops) {
+	var loopGroups = [];
 	var processedIds = [];
-	var parLoopIds = getLoopIds($parLoops);
+	var parLoopIds = Object.keys(parLoops);
+	var $loopJps = getLoopsFromIds(parLoopIds);
 	var currLvl = 0;
 
-	while(processedIds.length < $parLoops.length) {
+	while(processedIds.length < parLoopIds.length) {
 
-		for(var $loop of $parLoops) {
-			if($loop.nestedLevel != currLvl || processedIds.includes($loop.id))
+		for(var loopId of parLoopIds) {
+			var $loop = $loopJps[loopId];
+		
+			if($loop.nestedLevel != currLvl || processedIds.includes(loopId))
 				continue;
 		
 			var currentGroup = [];
-			currentGroup.push([$loop]);
-			processedIds.push($loop.id);
-			mainLoops.push($loop);
+			currentGroup.push([loopId]);
+			processedIds.push(loopId);
+			parLoops[loopId]["isMainLoop"] = true;
 			
 			var $loopDescendants = $loop.descendants("loop");
 			for(var $descendant of $loopDescendants) {
@@ -394,7 +508,7 @@ function getParLoopGroups($parLoops, mainLoops) {
 				var toAdd = [];
 				for(var loops of currentGroup) {
 					var newLoops = Array.from(loops);
-					newLoops.push($descendant);
+					newLoops.push($descendant.id);
 					toAdd.push(newLoops);
 				}
 
@@ -402,11 +516,11 @@ function getParLoopGroups($parLoops, mainLoops) {
 					currentGroup.push(elem);
 				}
 
-				currentGroup.push([$descendant]);
+				currentGroup.push([$descendant.id]);
 			}
 	
 			for(var elem of currentGroup) {
-				$loopGroups.push(elem);
+				loopGroups.push(elem);
 			}
 			
 		}
@@ -415,44 +529,31 @@ function getParLoopGroups($parLoops, mainLoops) {
 		
 	}
 
-	return $loopGroups;
+	return loopGroups;
 }
 
 function getParLoops(functionFilters) {
-	var loops = [];
-
-	for(var result of Query.search('function').search('loop').chain()) {
-		// Only time loops inside filtered functions
-		var skip_loop = true;
-		for(var functionFilter of functionFilters) {
-			if(result["function"].name.startsWith(functionFilter)) {
-				skip_loop = false;
-				break;
-			}
-		}
-
-		if(skip_loop)
-			continue;
-		
-		loops.push(result["loop"]);
-	}
-
+	var loops = getLoopsFiltered(functionFilters);
+	
 	Parallelize.forLoops(loops);
 
 	var pragmas = Parallelize.getForLoopsPragmas(loops);
 	var astIds = Object.keys(pragmas["parallelLoops"]);
 
-	var parLoops = [];
+	var parLoops = {};
 	for(var loop of loops) {
 		if(astIds.includes(loop.astId)) {
-			parLoops.push(loop);
+			var parLoop = {};
+			parLoop["pragma"] = pragmas["parallelLoops"][loop.astId];
+			parLoop["isMainLoop"] = false;
+			parLoops[loop.id] = parLoop;			
 		}
 	}
-
+	
 	return parLoops;
 }
 
-function buildAndRun(benchmark, compoundId, nRuns, isPar) {
+function buildAndRun(benchmark, compoundId, nRuns, isPar, problemSizeFlag) {
 	var subFolder = "";
 
 	var compoundIdStr = "";
@@ -460,13 +561,13 @@ function buildAndRun(benchmark, compoundId, nRuns, isPar) {
 	if(isPar) {
 		compoundIdStr = String(compoundId);
 		compoundIdStr = Strings.replacer(compoundIdStr, / /g, "_");
-		subFolder = "/par/" + compoundIdStr;
+		subFolder = "/par" + "/" + compoundIdStr;
 	}
 	else
 		subFolder = "/seq";
 	
-	var folder = Io.mkdir(benchmark.outputFolder + subFolder);
-	var buildFolder = Io.mkdir(benchmark.outputFolder + subFolder + "/build");
+	var folder = Io.mkdir(benchmark.outputFolder + problemSizeFlag + subFolder);
+	var buildFolder = Io.mkdir(benchmark.outputFolder + problemSizeFlag + subFolder + "/build");
 	Clava.writeCode(folder);
 
 	var cmaker = new CMaker(benchmark.name);
@@ -491,4 +592,159 @@ function buildAndRun(benchmark, compoundId, nRuns, isPar) {
 	
 
 	return executors;
+}
+
+function addPragmas(loopGroup, parLoops) {
+	var $loopJps = getLoopsFromIds(loopGroup);
+
+	if(loopGroup.length > 1) {
+		var lowestNestedId = getLowestNestedLevel(loopGroup);
+		var codeBefore = "omp_set_nested(1);";
+		var codeAfter = "omp_set_nested(0);";
+		$loopJps[lowestNestedId].insertBefore(codeBefore);
+		$loopJps[lowestNestedId].insertAfter(codeAfter);
+	}
+	
+
+	for(var loopId of loopGroup) {
+		$loopJps[loopId].insertBefore(parLoops[loopId]["pragma"]);
+	}
+	//Clava.rebuild();
+}
+
+function getMainLoopIds(parLoops) {
+	var mainLoopsIds = [];
+	var parLoopIds = Object.keys(parLoops);
+	for(var parLoopId of parLoopIds) {
+		if(parLoops[parLoopId]["isMainLoop"])
+			mainLoopsIds.push(parLoopId);
+	}
+	
+	return mainLoopsIds;
+}
+
+function createBenchGroupResultsObj(nRuns) {
+	var benchGroupResultsObj = {};
+	benchGroupResultsObj["runsPerVersion"] = nRuns;
+	benchGroupResultsObj["totalRuns"] = 0;
+	benchGroupResultsObj["totalVersions"] = 0;
+	benchGroupResultsObj["totalParLoops"] = 0;
+	benchGroupResultsObj["totalExecutionTimeInSec"] = 0;
+	benchGroupResultsObj["totalBenchmarks"] = 0;
+	benchGroupResultsObj["benchmarks"] = [];
+
+	return benchGroupResultsObj;
+}
+
+function createBenchResultsObj(benchmark, problemSizeFlag) {
+	var benchResultsObj = {};
+	benchResultsObj["benchmark"] = benchmark.folder;
+
+	benchResultsObj["problemSizeFlag"] = problemSizeFlag;
+	benchResultsObj["par"] = {};
+	benchResultsObj["par"]["nVersions"] = 0;
+	benchResultsObj["par"]["versions"] = [];
+	benchResultsObj["seq"] = [];
+
+	return benchResultsObj;
+}
+
+
+function concatFlags(flags) {
+	var flagString = "";
+
+	for(var flag of flags) {
+		flagString += flag;
+		flagString += " "; 
+	}
+
+	return flagString;
+}
+
+function getLoopsFiltered(functionFilters) {
+	var loops = [];
+
+	for(var result of Query.search('function').search('loop').chain()) {
+		var foundLoop = result["loop"];
+	
+		// Only time loops inside filtered functions
+		var skip_loop = false;
+		if(functionFilters.length > 0) {
+			var skip_loop = true;
+			for(var functionFilter of functionFilters) {
+				if(result["function"].name.startsWith(functionFilter)) {
+					skip_loop = false;
+					break;
+				}
+			}
+		}		
+
+		if(skip_loop)
+			continue;
+		
+		loops.push(foundLoop);
+	}
+	
+	return loops;
+}
+
+function getLoopsFromIds(loopIdFilters) {
+	var loops = {};
+
+	for(var result of Query.search('function').search('loop').chain()) {
+		var foundLoop = result["loop"];
+
+		if(loopIdFilters.contains(foundLoop.id))
+			loops[foundLoop.id] = foundLoop;
+	}
+	
+	return loops;
+}
+
+function getSubMainLoopId(loopGroup, parLoops) {
+	var subMainLoopId = loopGroup[0];
+	var $loopJps = getLoopsFromIds(loopGroup);
+	var found = false;
+	while(!found) {
+		found = true;
+		for(var loopId of loopGroup) {
+			var subMainLoopRank = $loopJps[subMainLoopId].rank;
+			var newLoopRank = $loopJps[loopId].rank;
+
+			if(checkRankDescendant(loopId, newLoopRank)) {
+				subMainLoopId = loopId;
+				found = false;
+			}
+		}
+	}
+
+	return subMainLoopId;
+}
+
+function getParLoopsFromCache(benchmark,  benchmarkGroup, problemSizeFlag) {
+	var parLoops = {};
+	var path = "./cache/" + benchmarkGroup + "/" + benchmark.name + "/parLoops" + problemSizeFlag + ".json";
+	
+	parLoops = Io.readJson(path);
+	println(parLoops);
+
+	return parLoops;
+}
+
+function writeParLoopsToCache(benchmark, benchmarkGroup, problemSizeFlag, parLoops) {
+	var path = "./cache/" + benchmarkGroup + "/" + benchmark.name + "/parLoops" + problemSizeFlag + ".json";
+	Io.writeJson(path, parLoops);
+}
+
+function getLowestNestedLevel(loopGroup) {
+	var lowestNestedId = loopGroup[0];
+	var $loopJps = getLoopsFromIds(loopGroup);
+
+	for(var loopId of loopGroup) {
+		if($loopJps[loopId].nesteLevel < $loopJps[lowestNestedId].nesteLevel) {
+			lowestNestedId = loopId;
+		}
+	}
+
+	return lowestNestedId;
 }
