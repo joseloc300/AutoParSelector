@@ -33,6 +33,8 @@ function addLoopInfo(parLoops, benchmarkResults) {
 		var $loop = $loopJps[loopId];
 		
 		var loopInstructionInfo = getInstructionInfo($loop);
+
+		println("loop iterations = " + $loop.iterations);
 		
 		benchmarkResults["loops"][index] = {};
 		benchmarkResults["loops"][index]["id"] = $loop.id;
@@ -478,7 +480,7 @@ function checkRankDescendant(loopRank0, loopRank1) {
 	return true;
 }
 
-function getParLoopGroups(parLoops) {
+function getParLoopGroups(parLoops, loopGroupSizeLimit) {
 	var loopGroups = [];
 	var processedIds = [];
 	var parLoopIds = Object.keys(parLoops);
@@ -529,7 +531,19 @@ function getParLoopGroups(parLoops) {
 		
 	}
 
+	filterLoopGroups(loopGroups, loopGroupSizeLimit);
+
 	return loopGroups;
+}
+
+function filterLoopGroups(loopGroups, loopGroupSizeLimit) {
+	for(var i = loopGroups.length - 1; i >= 0; i--){
+		var loopGroup = loopGroups[i];
+		println(loopGroup.length);
+		if(loopGroup.length > loopGroupSizeLimit) {
+			loopGroups.splice(i, 1);
+		}
+	}
 }
 
 function getParLoops(functionFilters) {
@@ -623,8 +637,9 @@ function getMainLoopIds(parLoops) {
 	return mainLoopsIds;
 }
 
-function createBenchGroupResultsObj(nRuns) {
+function createBenchGroupResultsObj(nRuns, loopGroupSizeLimit) {
 	var benchGroupResultsObj = {};
+	benchGroupResultsObj["loopGroupSizeLimit"] = loopGroupSizeLimit;
 	benchGroupResultsObj["runsPerVersion"] = nRuns;
 	benchGroupResultsObj["totalRuns"] = 0;
 	benchGroupResultsObj["totalVersions"] = 0;

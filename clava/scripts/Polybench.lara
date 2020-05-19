@@ -25,12 +25,13 @@ aspectdef Polybench
 	var benchGroupName = "polybench-c-3.2";
 	var start_time = performance.now();
 	var nRuns = 3;
+	var loopGroupSizeLimit = 2;
 	var functionFilters = ["kernel_"];
-	var problemSizeFlags3_2 = [/*"-DMINI_DATASET", "-DSMALL_DATASET", */"-DSTANDARD_DATASET", "-DLARGE_DATASET", "-DEXTRALARGE_DATASET"];
+	var problemSizeFlags3_2 = ["-DMINI_DATASET", "-DSMALL_DATASET", /*"-DSTANDARD_DATASET", "-DLARGE_DATASET", "-DEXTRALARGE_DATASET"*/];
 	//var problemSizeFlags3_2 = ["-DMINI_DATASET", "-DSMALL_DATASET", "-DSTANDARD_DATASET", "-DLARGE_DATASET", "-DEXTRALARGE_DATASET"];
 	var problemSizeFlags4_2 = ["-DMINI_DATASET", "-DSMALL_DATASET", "-DMEDIUM_DATASET", "-DLARGE_DATASET", "-DEXTRALARGE_DATASET"];
 
-	var polybenchResults = createBenchGroupResultsObj(nRuns);
+	var polybenchResults = createBenchGroupResultsObj(nRuns, loopGroupSizeLimit);
 
 	var allFolders = ["datamining", "linear-algebra", "medley", "stencils"];
 	var excludedFiles = [];
@@ -49,8 +50,6 @@ aspectdef Polybench
 	println("Processing benchmarks");
 	for (var benchmark of benchmarks) {
 		println("Processing: " + benchmark.folder);
-
-		//Clava.pushAst();
 
 		for(var problemSizeFlag of problemSizeFlags3_2) {
 			println("Current problem size flag = " + problemSizeFlag);
@@ -73,17 +72,15 @@ aspectdef Polybench
 				Clava.popAst(); //NEW
 				writeParLoopsToCache(benchmark, benchGroupName, problemSizeFlag, parLoops);
 			}
-			//Clava.pushAst();
 	
 			var benchmarkResults = createBenchResultsObj(benchmark, problemSizeFlag);
 		
 			polybenchResults["totalParLoops"] += Object.keys(parLoops).length;
 	
 			countLoopIterations(parLoops);
-			
-			var parLoopGroups = getParLoopGroups(parLoops);
+
+			var parLoopGroups = getParLoopGroups(parLoops, loopGroupSizeLimit);
 			addLoopInfo(parLoops, benchmarkResults);
-			//Clava.popAst();
 	
 			polybenchResults["totalVersions"] += parLoopGroups.length;
 			polybenchResults["totalRuns"] += parLoopGroups.length * nRuns;
@@ -92,7 +89,6 @@ aspectdef Polybench
 			for (var loopGroup of parLoopGroups) {
 				Clava.pushAst();
 	
-				//Parallelize.forLoops(loopGroup);
 				addPragmas(loopGroup, parLoops);
 	
 				var measuresPar = addTimerPar(loopGroup, parLoops);
@@ -114,11 +110,11 @@ aspectdef Polybench
 			polybenchResults["benchmarks"].push(benchmarkResults);
 			Io.writeJson(benchmark.outputFolder + problemSizeFlag + "/results.json", benchmarkResults);
 		}
-		//Clava.popAst();	
 	}
 	var end_time = performance.now();
 	polybenchResults["totalExecutionTimeInSec"] = (end_time - start_time) / 1000;
 	
 	Io.writeJson("./results/" + benchGroupName + "_" + now.toISOString() + ".json", polybenchResults);
+	println("Finished processing " + benchGroupName);
 
 end
