@@ -18,7 +18,133 @@ function getLoopIndexes(loopGroup, parLoops) {
 	return indexes;
 }
 
-function countLoopIterations(loops) {
+function countLoopIterations(benchmark, parLoops, problemSizeFlag, loopGroupSizeLimit) {
+	var loopIds = Object.keys(parLoops);
+	for(var loopId of loopIds) {
+		Clava.pushAst();
+
+		var $loop = getLoopsFromIds([loopId])[loopId];
+		var $parentLoop = $loop.ancestor("loop");
+
+		var loopPrefix = "iterations";
+		var parentPrefix = "parentIterations";
+
+		var codeLoop = "printf(\"" + loopPrefix + "%d\\n\", " + $loop.iterationsExpr.code + ");";
+		$loop.insertBefore(codeLoop);
+
+		if($parentLoop) {
+			var codeParent = "printf(\"" + parentPrefix + "%d\\n\", " + $parentLoop.iterationsExpr.code + ");";
+			$parentLoop.insertBefore(codeParent);
+		}
+		
+		var executorSeq = buildAndRun(benchmark, -1, loopGroupSizeLimit, 1, false, problemSizeFlag)[0];
+		var consoleOutput = executorSeq.getConsoleOutput();
+
+		getLoopIterationStats(loopId, parLoops, consoleOutput, loopPrefix, parentPrefix);
+
+		Clava.popAst();
+	}
+}
+
+function getLoopIterationStats(loopId, parLoops, consoleOutput, loopPrefix, parentPrefix) {
+	var maxIterations = 0;
+	var minIterations = 0;
+	var avgIterations = 0;
+	var stdDevIterations = 0;
+	var firstInstance = true;
+	var instances = [];
+
+	var maxParentIterations = 0;
+	var minParentIterations = 0;
+	var avgParentIterations = 0;
+	var stdDevParentIterations = 0;
+	var parentFirstInstance = true;
+	var parentInstances = [];
+
+	var lines = consoleOutput.split("\n");
+	
+
+	for(var line of lines) {
+		if(line.startsWith(loopPrefix)) {
+			var value = parseInt(line.substr(loopPrefix.length));
+			instances.push(value);
+			if(firstInstance) {
+				firstInstance = false;
+				maxIterations = value;
+				minIterations = value;
+				avgIterations += value;
+			}
+			else {
+				avgIterations += value;
+				if(value > maxIterations) {
+					maxIterations = value;
+				}
+				if(value < minIterations) {
+					minIterations = value;
+				}
+			}
+		}
+
+		if(line.startsWith(parentPrefix)) {
+			var value = parseInt(line.substr(parentPrefix.length));
+			parentInstances.push(value);
+			if(parentFirstInstance) {
+				parentFirstInstance = false;
+				maxParentIterations = value;
+				minParentIterations = value;
+				avgParentIterations += value;
+			}
+			else {
+				avgParentIterations += value;
+				if(value > maxParentIterations) {
+					maxParentIterations = value;
+				}
+				if(value < minParentIterations) {
+					minParentIterations = value;
+				}
+			}
+		}
+
+		
+	}
+
+	//loop
+	avgIterations /= instances.length;
+	for(var value of instances) {
+		stdDevIterations += Math.pow(value - avgIterations , 2);
+	}
+	stdDevIterations /= instances.length;
+	stdDevIterations = Math.sqrt(stdDevIterations);
+
+	//parentLoop
+	if(parentInstances.length > 0) {
+		avgParentIterations /= parentInstances.length;
+		for(var value of parentInstances) {
+			stdDevParentIterations += Math.pow(value - avgParentIterations , 2);
+		}
+		stdDevParentIterations /= parentInstances.length;
+		stdDevParentIterations = Math.sqrt(stdDevParentIterations);
+	}
+	else {
+		maxParentIterations = 1;
+		minParentIterations = 1;
+		avgParentIterations = 1;
+		stdDevParentIterations = 0;
+	}
+	
+	
+	
+	parLoops[loopId]["maxIterations"] = maxIterations;
+	parLoops[loopId]["minIterations"] = minIterations;
+	parLoops[loopId]["avgIterations"] = avgIterations;
+	parLoops[loopId]["stdDevIterations"] = stdDevIterations;
+	parLoops[loopId]["maxParentIterations"] = maxParentIterations;
+	parLoops[loopId]["minParentIterations"] = minParentIterations;
+	parLoops[loopId]["avgParentIterations"] = avgParentIterations;
+	parLoops[loopId]["stdDevParentIterations"] = stdDevParentIterations;
+	parLoops[loopId]["totalCalls"] = instances.length;
+	parLoops[loopId]["hasIterationVariation"] = maxIterations != minIterations;
+	parLoops[loopId]["hasParentIterationVariation"] = maxParentIterations != minParentIterations;
 	
 }
 
@@ -33,33 +159,47 @@ function addLoopInfo(parLoops, benchmarkResults) {
 		var $loop = $loopJps[loopId];
 		
 		var loopInstructionInfo = getInstructionInfo($loop);
-
-		println("loop iterations = " + $loop.iterations);
 		
 		benchmarkResults["loops"][index] = {};
 		benchmarkResults["loops"][index]["id"] = $loop.id;
 		benchmarkResults["loops"][index]["origLine"] = $loop.line;
-		benchmarkResults["loops"][index]["iterations"] = $loop.iterationsExpr.code;
+		benchmarkResults["loops"][index]["maxIterations"] = parLoops[loopId]["maxIterations"];
+		benchmarkResults["loops"][index]["minIterations"] = parLoops[loopId]["minIterations"];
+		benchmarkResults["loops"][index]["avgIterations"] = parLoops[loopId]["avgIterations"];
+		benchmarkResults["loops"][index]["stdDevIterations"] = parLoops[loopId]["stdDevIterations"];
+		benchmarkResults["loops"][index]["hasIterationVariation"] = parLoops[loopId]["hasIterationVariation"];
+
+		benchmarkResults["loops"][index]["maxParentIterations"] = parLoops[loopId]["maxParentIterations"];
+		benchmarkResults["loops"][index]["minParentIterations"] = parLoops[loopId]["minParentIterations"];
+		benchmarkResults["loops"][index]["avgParentIterations"] = parLoops[loopId]["avgParentIterations"];
+		benchmarkResults["loops"][index]["stdDevParentIterations"] = parLoops[loopId]["stdDevParentIterations"];
+		benchmarkResults["loops"][index]["totalCalls"] = parLoops[loopId]["totalCalls"];
+		benchmarkResults["loops"][index]["hasParentIterationVariation"] = parLoops[loopId]["hasParentIterationVariation"];
+		
 		benchmarkResults["loops"][index]["nestedLevel"] = $loop.nestedLevel;
 		benchmarkResults["loops"][index]["isMainLoop"] = parLoops[loopId]["isMainLoop"];
 		benchmarkResults["loops"][index]["isInnermost"] = $loop.isInnermost;
 		benchmarkResults["loops"][index]["isOutermost"] = $loop.isOutermost;
 		benchmarkResults["loops"][index]["rank"] = Array.from($loop.rank);
+		
 		benchmarkResults["loops"][index]["arithmeticInstructions"] = loopInstructionInfo["arithmeticInstructions"];
 		benchmarkResults["loops"][index]["logicInstructions"] = loopInstructionInfo["logicInstructions"];
 		benchmarkResults["loops"][index]["comparisonInstructions"] = loopInstructionInfo["comparisonInstructions"];
 		benchmarkResults["loops"][index]["assignmentInstructions"] = loopInstructionInfo["assignmentInstructions"];
 		benchmarkResults["loops"][index]["bitwiseInstructions"] = loopInstructionInfo["bitwiseInstructions"];
-		//benchmarkResults["loops"][index]["totalALUInstructions"] = loopInstructionInfo["totalALUInstructions"];
 		benchmarkResults["loops"][index]["ifInstructions"] = loopInstructionInfo["ifInstructions"];
 		benchmarkResults["loops"][index]["loopInstructions"] = loopInstructionInfo["loopInstructions"];
 		benchmarkResults["loops"][index]["varDeclarationInstructions"] = loopInstructionInfo["varDeclarationInstructions"];
 		benchmarkResults["loops"][index]["arrayAccessInstructions"] = loopInstructionInfo["arrayAccessInstructions"];
-		benchmarkResults["loops"][index]["totalInstructions"] = loopInstructionInfo["totalInstructions"];
+		benchmarkResults["loops"][index]["externalFuncionCalls"] = loopInstructionInfo["externalFuncionCalls"];
 		benchmarkResults["loops"][index]["level0FunctionCalls"] = loopInstructionInfo["level0FunctionCalls"];
+		benchmarkResults["loops"][index]["nestedFunctionCalls"] = loopInstructionInfo["nestedFunctionCalls"];
 		benchmarkResults["loops"][index]["totalFunctionCalls"] = loopInstructionInfo["totalFunctionCalls"];
-		benchmarkResults["loops"][index]["hasRecursiveFunctionCall"] = loopInstructionInfo["hasRecursiveFunctionCall"];
-		benchmarkResults["loops"][index]["pragma"] = parLoops[loopId]["pragma"];;
+		benchmarkResults["loops"][index]["functionInstructions"] = loopInstructionInfo["functionInstructions"];
+		benchmarkResults["loops"][index]["totalInstructions"] = loopInstructionInfo["totalInstructions"];
+		benchmarkResults["loops"][index]["recursiveFunctionCalls"] = loopInstructionInfo["recursiveFunctionCalls"];
+		
+		benchmarkResults["loops"][index]["pragma"] = parLoops[loopId]["pragma"];
 
 		parLoops[loopId]["index"] = index;
 		index++;
@@ -90,10 +230,13 @@ function createInstructionInfoObj() {
 	instructionInfo["loopInstructions"] = 0;
 	instructionInfo["varDeclarationInstructions"] = 0;
 	instructionInfo["arrayAccessInstructions"] = 0;
+	instructionInfo["externalFuncionCalls"] = 0;
 	instructionInfo["level0FunctionCalls"] = 0;
+	instructionInfo["nestedFunctionCalls"] = 0;
 	instructionInfo["totalFunctionCalls"] = 0;
+	instructionInfo["functionInstructions"] = 0;
 	instructionInfo["totalInstructions"] = 0;
-	instructionInfo["hasRecursiveFunctionCall"] = false;
+	instructionInfo["recursiveFunctionCalls"] = 0;
 
 	return instructionInfo;
 }
@@ -106,8 +249,16 @@ function functionAnalyser($loop, functionInstructionInfo) {
 		functionInstructionInfo["totalFunctionCalls"] += 1;
 	
 		var $function = functionCall.function;
-		var $functionDefinition = $function.definitionJp;
 		var functionId = $function.id;
+		println(functionId);
+		var $functionDefinition = $function.definitionJp;
+
+		if(typeof $functionDefinition === "undefined") {
+			functionInstructionInfo["externalFuncionCalls"] += 1;
+			continue;
+		}
+		
+		
 
 		var callStack = [];
 		//do i need to check return value here?
@@ -117,8 +268,8 @@ function functionAnalyser($loop, functionInstructionInfo) {
 
 function functionAnalyserAux($functionDefinition, functionId, callStack, functionInstructionInfo) {
 	if(callStack.contains(functionId)) {
-		functionInstructionInfo["hasRecursiveFunctionCall"] = true;
-		return -1;
+		functionInstructionInfo["recursiveFunctionCalls"] += 1;
+		return;
 	}
 
 	instructionAnalyser($functionDefinition, functionInstructionInfo);
@@ -126,21 +277,32 @@ function functionAnalyserAux($functionDefinition, functionId, callStack, functio
 	var functionCalls = $functionDefinition.descendants("call");
 
 	for(var functionCall of functionCalls) {
+		functionInstructionInfo["nestedFunctionCalls"] += 1;
 		functionInstructionInfo["totalFunctionCalls"] += 1;
 	
 		var $function = functionCall.function;
-		var $functionDefinition = $function.definitionJp;
 		var functionId = $function.id;
+		println(functionId);
+		var $functionDefinition = $function.definitionJp;
+
+		if(typeof $functionDefinition === "undefined") {
+			functionInstructionInfo["externalFuncionCalls"] += 1;
+			continue;
+		}
+		
+		
 
 		var callStack = Array.from(callStack);
 		callStack.push(functionId);
+
+		functionAnalyserAux($functionDefinition, functionId, callStack, functionInstructionInfo);
 		//do i need to check return value here?
-		if(functionAnalyserAux($functionDefinition, functionId, callStack, functionInstructionInfo) != 0) {
+		/*if(functionAnalyserAux($functionDefinition, functionId, callStack, functionInstructionInfo) != 0) {
 			return -1;
-		}
+		}*/
 	}
 
-	return 0;
+	return;
 }
 
 function instructionAnalyser($jp, instructionInfo) {
@@ -200,13 +362,16 @@ function instructionAnalyser($jp, instructionInfo) {
 }
 
 function joinInstructionInfoObjs(instructionInfo, functionInstructionInfo) {
+	instructionInfo["externalFuncionCalls"] = functionInstructionInfo["externalFuncionCalls"];
 	instructionInfo["level0FunctionCalls"] = functionInstructionInfo["level0FunctionCalls"];
-	instructionInfo["totalFunctionCalls"] = functionInstructionInfo["level0FunctionCalls"];
-	instructionInfo["hasRecursiveFunctionCall"] = functionInstructionInfo["hasRecursiveFunctionCall"];
+	instructionInfo["nestedFunctionCalls"] = functionInstructionInfo["nestedFunctionCalls"];
+	instructionInfo["totalFunctionCalls"] = functionInstructionInfo["totalFunctionCalls"];
+	instructionInfo["recursiveFunctionCalls"] = functionInstructionInfo["recursiveFunctionCalls"];
 
+	/*
 	if(functionInstructionInfo["hasRecursiveFunctionCall"]) {
 		return;
-	}
+	}*/
 
 	instructionInfo["arithmeticInstructions"] += functionInstructionInfo["arithmeticInstructions"];
 	instructionInfo["logicInstructions"] += functionInstructionInfo["logicInstructions"];
@@ -218,6 +383,7 @@ function joinInstructionInfoObjs(instructionInfo, functionInstructionInfo) {
 	instructionInfo["varDeclarationInstructions"] += functionInstructionInfo["varDeclarationInstructions"];
 	instructionInfo["arrayAccessInstructions"] += functionInstructionInfo["arrayAccessInstructions"];
 	instructionInfo["totalInstructions"] += functionInstructionInfo["totalInstructions"];
+	instructionInfo["functionInstructions"] = functionInstructionInfo["totalInstructions"];
 	
 }
 
@@ -345,6 +511,7 @@ function createBenchmarkObj(fileString) {
 	var benchGroupNameIndex = fileString.indexOf("/sources/") + 9;
 	benchmark.c = Io.getAbsolutePath(fileString);
 	benchmark.folder = Io.getAbsolutePath(fileString.slice(0, lastSlash));
+	benchmark.cacheFolder = Io.getAbsolutePath("./cache/" + fileString.slice(benchGroupNameIndex, lastSlash));
 	benchmark.outputFolder = Io.getAbsolutePath("./outputs/" + fileString.slice(benchGroupNameIndex, lastSlash));
 	benchmark.name = Io.removeExtension(fileString.substring(lastSlash + 1));
 
@@ -539,7 +706,6 @@ function getParLoopGroups(parLoops, loopGroupSizeLimit) {
 function filterLoopGroups(loopGroups, loopGroupSizeLimit) {
 	for(var i = loopGroups.length - 1; i >= 0; i--){
 		var loopGroup = loopGroups[i];
-		println(loopGroup.length);
 		if(loopGroup.length > loopGroupSizeLimit) {
 			loopGroups.splice(i, 1);
 		}
@@ -560,22 +726,18 @@ function getParLoops(functionFilters) {
 			var parLoop = {};
 			parLoop["pragma"] = pragmas["parallelLoops"][loop.astId];
 			parLoop["isMainLoop"] = false;
-			parLoops[loop.id] = parLoop;			
+			parLoops[loop.id] = parLoop;		
 		}
 	}
 	
 	return parLoops;
 }
 
-function buildAndRun(benchmark, compoundId, nRuns, isPar, problemSizeFlag) {
+function buildAndRun(benchmark, version, loopGroupSizeLimit, nRuns, isPar, problemSizeFlag) {
 	var subFolder = "";
-
-	var compoundIdStr = "";
 	
 	if(isPar) {
-		compoundIdStr = String(compoundId);
-		compoundIdStr = Strings.replacer(compoundIdStr, / /g, "_");
-		subFolder = "/par" + "/" + compoundIdStr;
+		subFolder = "/par/" + loopGroupSizeLimit + "/" + version;
 	}
 	else
 		subFolder = "/seq";
@@ -623,7 +785,6 @@ function addPragmas(loopGroup, parLoops) {
 	for(var loopId of loopGroup) {
 		$loopJps[loopId].insertBefore(parLoops[loopId]["pragma"]);
 	}
-	//Clava.rebuild();
 }
 
 function getMainLoopIds(parLoops) {
@@ -682,7 +843,6 @@ function getLoopsFiltered(functionFilters) {
 	for(var result of Query.search('function').search('loop').chain()) {
 		var foundLoop = result["loop"];
 	
-		// Only time loops inside filtered functions
 		var skip_loop = false;
 		if(functionFilters.length > 0) {
 			var skip_loop = true;
@@ -736,19 +896,16 @@ function getSubMainLoopId(loopGroup, parLoops) {
 	return subMainLoopId;
 }
 
-function getParLoopsFromCache(benchmark,  benchmarkGroup, problemSizeFlag) {
-	var parLoops = {};
-	var path = "./cache/" + benchmarkGroup + "/" + benchmark.name + "/parLoops" + problemSizeFlag + ".json";
-	
-	parLoops = Io.readJson(path);
-	println(parLoops);
+function getObjFromCache(benchmark,  benchmarkGroup, problemSizeFlag, loopGroupSizeLimit, objectName) {
+	var path = benchmark.cacheFolder + problemSizeFlag + "/" + objectName + "-" + loopGroupSizeLimit + ".json";
+	var obj = Io.readJson(path);
 
-	return parLoops;
+	return obj;
 }
 
-function writeParLoopsToCache(benchmark, benchmarkGroup, problemSizeFlag, parLoops) {
-	var path = "./cache/" + benchmarkGroup + "/" + benchmark.name + "/parLoops" + problemSizeFlag + ".json";
-	Io.writeJson(path, parLoops);
+function writeObjToCache(benchmark, benchmarkGroup, problemSizeFlag, loopGroupSizeLimit, objectName, obj) {
+	var path = benchmark.cacheFolder + problemSizeFlag + "/" + objectName + "-" + loopGroupSizeLimit + ".json";
+	Io.writeJson(path, obj);
 }
 
 function getLowestNestedLevel(loopGroup) {

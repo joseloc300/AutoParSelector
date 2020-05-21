@@ -11,7 +11,6 @@ import weaver.Query;
 import lara.Strings;
 
 import CustomExecutionTimeMetric;
-//import CustomParallelize;
 import Utils;
 
 aspectdef Polybench
@@ -27,8 +26,7 @@ aspectdef Polybench
 	var nRuns = 3;
 	var loopGroupSizeLimit = 2;
 	var functionFilters = ["kernel_"];
-	var problemSizeFlags3_2 = ["-DMINI_DATASET", "-DSMALL_DATASET", /*"-DSTANDARD_DATASET", "-DLARGE_DATASET", "-DEXTRALARGE_DATASET"*/];
-	//var problemSizeFlags3_2 = ["-DMINI_DATASET", "-DSMALL_DATASET", "-DSTANDARD_DATASET", "-DLARGE_DATASET", "-DEXTRALARGE_DATASET"];
+	var problemSizeFlags3_2 = ["-DMINI_DATASET"/*, "-DSMALL_DATASET", "-DSTANDARD_DATASET", "-DLARGE_DATASET", "-DEXTRALARGE_DATASET"*/];
 	var problemSizeFlags4_2 = ["-DMINI_DATASET", "-DSMALL_DATASET", "-DMEDIUM_DATASET", "-DLARGE_DATASET", "-DEXTRALARGE_DATASET"];
 
 	var polybenchResults = createBenchGroupResultsObj(nRuns, loopGroupSizeLimit);
@@ -62,26 +60,42 @@ aspectdef Polybench
 			rebuildCodeAst(benchmark, xtraCs, xtraIncludeFolders, flags);
 
 			var parLoops;
-
+			var parLoopGroups;
+			var benchmarkResults;
+			
 			if(readCache) {
-				parLoops = getParLoopsFromCache(benchmark, benchGroupName, problemSizeFlag);
+				parLoops = getObjFromCache(benchmark, benchGroupName, problemSizeFlag, loopGroupSizeLimit, "parLoops");
+				if(parLoops["nParLoops"] == 0) {
+					Clava.popAst();
+					continue;
+				}
+				//parLoopGroups = getParLoopGroups(parLoops, loopGroupSizeLimit);
+				
+				parLoopGroups = getObjFromCache(benchmark, benchGroupName, problemSizeFlag, loopGroupSizeLimit, "parLoopGroups");
+				benchmarkResults = getObjFromCache(benchmark, benchGroupName, problemSizeFlag, loopGroupSizeLimit, "benchmarkResults");
 			}
 			else {
 				Clava.pushAst();
 				parLoops = getParLoops(functionFilters);
-				Clava.popAst(); //NEW
-				writeParLoopsToCache(benchmark, benchGroupName, problemSizeFlag, parLoops);
-			}
-	
-			var benchmarkResults = createBenchResultsObj(benchmark, problemSizeFlag);
-		
-			polybenchResults["totalParLoops"] += Object.keys(parLoops).length;
-	
-			countLoopIterations(parLoops);
+				Clava.popAst();
 
-			var parLoopGroups = getParLoopGroups(parLoops, loopGroupSizeLimit);
-			addLoopInfo(parLoops, benchmarkResults);
-	
+				if(Object.keys(parLoops).length == 0) {
+					Clava.popAst();
+					continue;
+				}
+				
+				benchmarkResults = createBenchResultsObj(benchmark, problemSizeFlag);
+				countLoopIterations(benchmark, parLoops, problemSizeFlag);
+				parLoopGroups = getParLoopGroups(parLoops, loopGroupSizeLimit);
+				addLoopInfo(parLoops, benchmarkResults);
+				writeObjToCache(benchmark, benchGroupName, problemSizeFlag, loopGroupSizeLimit, "parLoops", parLoops);
+				
+				writeObjToCache(benchmark, benchGroupName, problemSizeFlag, loopGroupSizeLimit, "parLoopGroups", parLoopGroups);
+				writeObjToCache(benchmark, benchGroupName, problemSizeFlag, loopGroupSizeLimit, "benchmarkResults", benchmarkResults);
+				
+			}
+			
+			polybenchResults["totalParLoops"] += Object.keys(parLoops).length;
 			polybenchResults["totalVersions"] += parLoopGroups.length;
 			polybenchResults["totalRuns"] += parLoopGroups.length * nRuns;
 			
@@ -92,7 +106,7 @@ aspectdef Polybench
 				addPragmas(loopGroup, parLoops);
 	
 				var measuresPar = addTimerPar(loopGroup, parLoops);
-				var executorsPar = buildAndRun(benchmark, version, nRuns, true, problemSizeFlag);
+				var executorsPar = buildAndRun(benchmark, version, loopGroupSizeLimit, nRuns, true, problemSizeFlag);
 				addResults(benchmarkResults, measuresPar, executorsPar, version, loopGroup, parLoops);
 				version++;
 				Clava.popAst();
@@ -101,7 +115,7 @@ aspectdef Polybench
 			var parLoopIds = Object.keys(parLoops);
 	
 			var measuresSeq = addTimerSeq(parLoopIds, parLoops);
-			var executorsSeq = buildAndRun(benchmark, version, nRuns, false, problemSizeFlag);
+			var executorsSeq = buildAndRun(benchmark, version, loopGroupSizeLimit, nRuns, false, problemSizeFlag);
 			
 			version = -1;
 			addResults(benchmarkResults, measuresSeq, executorsSeq, version, loopGroup, parLoops);
