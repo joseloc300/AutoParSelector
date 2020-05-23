@@ -272,7 +272,7 @@ function functionAnalyserAux($functionDefinition, functionId, callStack, functio
 	
 		var $function = functionCall.function;
 		var functionId = $function.id;
-		println(functionId);
+		//println(functionId);
 		var $functionDefinition = $function.definitionJp;
 
 		if(typeof $functionDefinition === "undefined") {
@@ -757,11 +757,17 @@ function getParLoopsFromPrevOutput(benchmark, xtraCs, xtraIncludeFolders, flags)
 	var ompPragmas = getOmpPragmas();
 
 	for(var pragma of ompPragmas) {
-		var loopId = pragma.target.id;
+		var $loop = pragma.target;
+		var loopId = $loop.id;
 		loopId = fixLoopId(loopId, benchmark);
 		var parLoop = {};
+		var parentLoopId = "NULL";
+		if($loop.nestedLevel > 0) {
+			parentLoopId = fixLoopId($loop.ancestor("loop").id, benchmark);
+		}
 		parLoop["pragma"] = pragma.code;
 		parLoop["isMainLoop"] = false;
+		parLoop["parentLoopId"] = parentLoopId;
 		parLoops[loopId] = parLoop;	
 	}
 	
