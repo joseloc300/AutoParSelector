@@ -25,14 +25,14 @@ aspectdef NAS
 	var benchGroupName = "NAS";
 	var start_time = performance.now();
 	var nRuns = 3;
-	var loopGroupSizeLimit = 2;
+	var loopGroupSizeLimit = 1;
 	var functionFilters = [];
-	var problemSizeFlags = ["-DCLASS_S"/*, "-DCLASS_W", "-DCLASS_A", "-DCLASS_B", "-DCLASS_C", "-DCLASS_D", "-DCLASS_E"*/];
+	var problemSizeFlags = ["-DCLASS_S", /*"-DCLASS_W", "-DCLASS_A", "-DCLASS_B", "-DCLASS_C", "-DCLASS_D", "-DCLASS_E"*/];
 
 	var NASResults = createBenchGroupResultsObj(nRuns, loopGroupSizeLimit);
 
 	var allFolders = ["BT", "CG", "EP", "FT", "IS", "LU", "MG", "SP", "UA"];
-	var foldersToGetExpectedC = ["BT"];
+	var foldersToGetExpectedC = ["BT", "CG", "EP", "FT", "IS", "LU", "MG", "SP", "UA"];
 	var excludedFiles = ["expected_output.c"];
 	var excludedFolders = ["test"];
 	var benchmarks = getSubFolders(sourceFolder, benchmarkFolders, allFolders, excludedFiles, excludedFolders);

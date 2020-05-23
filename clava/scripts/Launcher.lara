@@ -15,12 +15,12 @@ aspectdef Launcher
 
 	var now = new Date(Date.now());
 
-	//call Polybench("./sources/polybench-c-3.2/", ["all"], now, false);
+	call Polybench("./sources/polybench-c-3.2/", ["all"], now, false);
 	//call Polybench("./sources/polybench-c-3.2/", ["datamining", "linear-algebra", "medley", "stencils"], now, true);
 	//call Polybench("./sources/polybench-c-3.2/", ["linear-algebra/kernels/3mm"], now, false);
 
-	call NAS("./sources/NAS/", ["BT"], now, false);
+	//call NAS("./sources/NAS/", ["BT"], now, false);
 	//call NAS("./sources/NAS/", ["BT", "CG", "EP", "FT", "IS", "LU", "MG", "SP", "UA"], now, true);
-	//call NAS("./sources/NAS/", ["BT", "CG", "EP"], now, false);
+	call NAS("./sources/NAS/", ["all"], now, false);
 	
 end

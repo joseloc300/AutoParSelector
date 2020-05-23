@@ -20,132 +20,122 @@ function getLoopIndexes(loopGroup, parLoops) {
 
 function countLoopIterations(benchmark, parLoops, problemSizeFlag, loopGroupSizeLimit) {
 	var loopIds = Object.keys(parLoops);
+	var newLoopIds = Array.from(loopIds);
+
 	for(var loopId of loopIds) {
-		Clava.pushAst();
+		if(parLoops[loopId]["parentLoopId"] != "NULL") {
+			newLoopIds.push(parLoops[loopId]["parentLoopId"]);
+		}
 
-		var $loop = getLoopsFromIds([loopId])[loopId];
-		var $parentLoop = $loop.ancestor("loop");
+	}
+	
+	Clava.pushAst();
+	
+	var $loops = getLoopsFromIds(newLoopIds);
+	for(var loopId of newLoopIds) {
+		var $loop = $loops[loopId];
 
-		var loopPrefix = "iterations";
-		var parentPrefix = "parentIterations";
+		var loopPrefix = "iterations_" + loopId + "_";
 
 		var codeLoop = "printf(\"" + loopPrefix + "%d\\n\", " + $loop.iterationsExpr.code + ");";
 		$loop.insertBefore(codeLoop);
-
-		if($parentLoop) {
-			var codeParent = "printf(\"" + parentPrefix + "%d\\n\", " + $parentLoop.iterationsExpr.code + ");";
-			$parentLoop.insertBefore(codeParent);
-		}
-		
-		var executorSeq = buildAndRun(benchmark, -1, loopGroupSizeLimit, 1, false, problemSizeFlag)[0];
-		var consoleOutput = executorSeq.getConsoleOutput();
-
-		getLoopIterationStats(loopId, parLoops, consoleOutput, loopPrefix, parentPrefix);
-
-		Clava.popAst();
 	}
+
+	var executorSeq = buildAndRun(benchmark, -1, loopGroupSizeLimit, 1, false, problemSizeFlag)[0];
+	var consoleOutput = executorSeq.getConsoleOutput();
+
+	getLoopIterationStats(newLoopIds, parLoops, consoleOutput);
+
+	Clava.popAst();
+	
 }
 
-function getLoopIterationStats(loopId, parLoops, consoleOutput, loopPrefix, parentPrefix) {
-	var maxIterations = 0;
-	var minIterations = 0;
-	var avgIterations = 0;
-	var stdDevIterations = 0;
-	var firstInstance = true;
-	var instances = [];
+function getLoopIterationStats(newLoopIds, parLoops, consoleOutput) {
+	var loopIterationObjs = {};
 
-	var maxParentIterations = 0;
-	var minParentIterations = 0;
-	var avgParentIterations = 0;
-	var stdDevParentIterations = 0;
-	var parentFirstInstance = true;
-	var parentInstances = [];
+	for(var loopId of newLoopIds) {
+		loopIterationObjs[loopId] = createLoopIterationObj();
+	}
 
 	var lines = consoleOutput.split("\n");
-	
-
 	for(var line of lines) {
-		if(line.startsWith(loopPrefix)) {
-			var value = parseInt(line.substr(loopPrefix.length));
-			instances.push(value);
-			if(firstInstance) {
-				firstInstance = false;
-				maxIterations = value;
-				minIterations = value;
-				avgIterations += value;
+		if(line.startsWith("iterations")) {
+			var firstUnderScoreIndex = line.indexOf("_");
+			var lastUnderScoreIndex = line.lastIndexOf("_");
+			var loopId = line.slice(firstUnderScoreIndex + 1, lastUnderScoreIndex);
+			var value = parseInt(line.substr(lastUnderScoreIndex + 1));
+
+			loopIterationObjs[loopId]["instances"].push(value);
+			if(loopIterationObjs[loopId]["firstInstance"]) {
+				loopIterationObjs[loopId]["firstInstance"] = false;
+				loopIterationObjs[loopId]["maxIterations"] = value;
+				loopIterationObjs[loopId]["minIterations"] = value;
+				loopIterationObjs[loopId]["avgIterations"] += value;
 			}
 			else {
-				avgIterations += value;
-				if(value > maxIterations) {
-					maxIterations = value;
+				loopIterationObjs[loopId]["avgIterations"] += value;
+				if(value > loopIterationObjs[loopId]["maxIterations"]) {
+					loopIterationObjs[loopId]["maxIterations"] = value;
 				}
-				if(value < minIterations) {
-					minIterations = value;
+				if(value < loopIterationObjs[loopId]["minIterations"]) {
+					loopIterationObjs[loopId]["minIterations"] = value;
 				}
 			}
 		}
+	}
 
-		if(line.startsWith(parentPrefix)) {
-			var value = parseInt(line.substr(parentPrefix.length));
-			parentInstances.push(value);
-			if(parentFirstInstance) {
-				parentFirstInstance = false;
-				maxParentIterations = value;
-				minParentIterations = value;
-				avgParentIterations += value;
-			}
-			else {
-				avgParentIterations += value;
-				if(value > maxParentIterations) {
-					maxParentIterations = value;
-				}
-				if(value < minParentIterations) {
-					minParentIterations = value;
-				}
-			}
+	for(var loopId of newLoopIds) {
+		loopIterationObjs[loopId]["avgIterations"] /= loopIterationObjs[loopId]["instances"].length;
+		for(var value of loopIterationObjs[loopId]["instances"]) {
+			loopIterationObjs[loopId]["stdDevIterations"] += Math.pow(value - loopIterationObjs[loopId]["avgIterations"] , 2);
 		}
+		loopIterationObjs[loopId]["stdDevIterations"] /= loopIterationObjs[loopId]["instances"].length;
+		loopIterationObjs[loopId]["stdDevIterations"] = Math.sqrt(loopIterationObjs[loopId]["stdDevIterations"]);
+	}	
+	
+	var parLoopIds = Object.keys(parLoops);
+	
+	for(var loopId of parLoopIds) {	
+		parLoops[loopId]["maxIterations"] = loopIterationObjs[loopId]["maxIterations"];
+		parLoops[loopId]["minIterations"] = loopIterationObjs[loopId]["minIterations"];
+		parLoops[loopId]["avgIterations"] = loopIterationObjs[loopId]["avgIterations"];
+		parLoops[loopId]["stdDevIterations"] = loopIterationObjs[loopId]["stdDevIterations"];
 
+		var parentLoopId = parLoops[loopId]["parentLoopId"];
+		if(parentLoopId != "NULL") {
+			parLoops[loopId]["maxParentIterations"] = loopIterationObjs[parentLoopId]["maxIterations"];
+			parLoops[loopId]["minParentIterations"] = loopIterationObjs[parentLoopId]["minIterations"];
+			parLoops[loopId]["avgParentIterations"] = loopIterationObjs[parentLoopId]["avgIterations"];
+			parLoops[loopId]["stdDevParentIterations"] = loopIterationObjs[parentLoopId]["stdDevIterations"];
+			parLoops[loopId]["hasParentIterationVariation"] = loopIterationObjs[parentLoopId]["maxIterations"] != loopIterationObjs[parentLoopId]["minIterations"];
+		}
+		else {
+			parLoops[loopId]["maxParentIterations"] = 1;
+			parLoops[loopId]["minParentIterations"] = 1;
+			parLoops[loopId]["avgParentIterations"] = 1;
+			parLoops[loopId]["stdDevParentIterations"] = 0;
+			parLoops[loopId]["hasParentIterationVariation"] = false;
+		}
+		
+		parLoops[loopId]["totalCalls"] = loopIterationObjs[loopId]["instances"].length;
+		parLoops[loopId]["hasIterationVariation"] = loopIterationObjs[loopId]["maxIterations"] != loopIterationObjs[loopId]["minIterations"];
 		
 	}
+	
+	
+}
 
-	//loop
-	avgIterations /= instances.length;
-	for(var value of instances) {
-		stdDevIterations += Math.pow(value - avgIterations , 2);
-	}
-	stdDevIterations /= instances.length;
-	stdDevIterations = Math.sqrt(stdDevIterations);
+function createLoopIterationObj() {
+	var loopIterationObj = {};
+	
+	loopIterationObj["maxIterations"] = 0;
+	loopIterationObj["minIterations"] = 0;
+	loopIterationObj["avgIterations"] = 0;
+	loopIterationObj["stdDevIterations"] = 0;
+	loopIterationObj["firstInstance"] = true;
+	loopIterationObj["instances"] = [];
 
-	//parentLoop
-	if(parentInstances.length > 0) {
-		avgParentIterations /= parentInstances.length;
-		for(var value of parentInstances) {
-			stdDevParentIterations += Math.pow(value - avgParentIterations , 2);
-		}
-		stdDevParentIterations /= parentInstances.length;
-		stdDevParentIterations = Math.sqrt(stdDevParentIterations);
-	}
-	else {
-		maxParentIterations = 1;
-		minParentIterations = 1;
-		avgParentIterations = 1;
-		stdDevParentIterations = 0;
-	}
-	
-	
-	
-	parLoops[loopId]["maxIterations"] = maxIterations;
-	parLoops[loopId]["minIterations"] = minIterations;
-	parLoops[loopId]["avgIterations"] = avgIterations;
-	parLoops[loopId]["stdDevIterations"] = stdDevIterations;
-	parLoops[loopId]["maxParentIterations"] = maxParentIterations;
-	parLoops[loopId]["minParentIterations"] = minParentIterations;
-	parLoops[loopId]["avgParentIterations"] = avgParentIterations;
-	parLoops[loopId]["stdDevParentIterations"] = stdDevParentIterations;
-	parLoops[loopId]["totalCalls"] = instances.length;
-	parLoops[loopId]["hasIterationVariation"] = maxIterations != minIterations;
-	parLoops[loopId]["hasParentIterationVariation"] = maxParentIterations != minParentIterations;
-	
+	return loopIterationObj;
 }
 
 function addLoopInfo(parLoops, benchmarkResults) {
@@ -726,8 +716,13 @@ function getParLoops(functionFilters) {
 	for(var loop of loops) {
 		if(astIds.includes(loop.astId)) {
 			var parLoop = {};
+			var parentLoopId = "NULL";
+			if(loop.nestedLevel > 0) {
+				parentLoopId = loop.ancestor("loop").id;
+			}
 			parLoop["pragma"] = pragmas["parallelLoops"][loop.astId];
 			parLoop["isMainLoop"] = false;
+			parLoop["parentLoopId"] = parentLoopId;
 			parLoops[loop.id] = parLoop;		
 		}
 	}
@@ -765,7 +760,7 @@ function getParLoopsFromPrevOutput(benchmark, xtraCs, xtraIncludeFolders, flags)
 		var loopId = pragma.target.id;
 		loopId = fixLoopId(loopId, benchmark);
 		var parLoop = {};
-		parLoop["pragma"] = pragma;
+		parLoop["pragma"] = pragma.code;
 		parLoop["isMainLoop"] = false;
 		parLoops[loopId] = parLoop;	
 	}
