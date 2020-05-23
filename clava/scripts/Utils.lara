@@ -23,7 +23,7 @@ function countLoopIterations(benchmark, parLoops, problemSizeFlag, loopGroupSize
 	var newLoopIds = Array.from(loopIds);
 
 	for(var loopId of loopIds) {
-		if(parLoops[loopId]["parentLoopId"] != "NULL") {
+		if(parLoops[loopId]["parentLoopId"] != "NULL" && !newLoopIds.contains(parLoops[loopId]["parentLoopId"])) {
 			newLoopIds.push(parLoops[loopId]["parentLoopId"]);
 		}
 
@@ -66,14 +66,13 @@ function getLoopIterationStats(newLoopIds, parLoops, consoleOutput) {
 			var value = parseInt(line.substr(lastUnderScoreIndex + 1));
 
 			loopIterationObjs[loopId]["instances"].push(value);
+			loopIterationObjs[loopId]["avgIterations"] += value;
 			if(loopIterationObjs[loopId]["firstInstance"]) {
 				loopIterationObjs[loopId]["firstInstance"] = false;
 				loopIterationObjs[loopId]["maxIterations"] = value;
 				loopIterationObjs[loopId]["minIterations"] = value;
-				loopIterationObjs[loopId]["avgIterations"] += value;
 			}
-			else {
-				loopIterationObjs[loopId]["avgIterations"] += value;
+			else {	
 				if(value > loopIterationObjs[loopId]["maxIterations"]) {
 					loopIterationObjs[loopId]["maxIterations"] = value;
 				}
@@ -240,7 +239,7 @@ function functionAnalyser($loop, functionInstructionInfo) {
 	
 		var $function = functionCall.function;
 		var functionId = $function.id;
-		println(functionId);
+		//println(functionId);
 		var $functionDefinition = $function.definitionJp;
 
 		if(typeof $functionDefinition === "undefined") {
