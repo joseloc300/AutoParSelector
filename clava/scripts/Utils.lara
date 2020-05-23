@@ -513,7 +513,9 @@ function createBenchmarkObj(fileString) {
 	benchmark.folder = Io.getAbsolutePath(fileString.slice(0, lastSlash));
 	benchmark.cacheFolder = Io.getAbsolutePath("./cache/" + fileString.slice(benchGroupNameIndex, lastSlash));
 	benchmark.outputFolder = Io.getAbsolutePath("./outputs/" + fileString.slice(benchGroupNameIndex, lastSlash));
-	benchmark.name = Io.removeExtension(fileString.substring(lastSlash + 1));
+
+	var lastSlashFolder = benchmark.folder.lastIndexOf("/");
+	benchmark.name = benchmark.folder.substring(lastSlashFolder + 1);
 
 	return benchmark;
 }
@@ -733,6 +735,58 @@ function getParLoops(functionFilters) {
 	return parLoops;
 }
 
+function getParLoopsFromPrevOutput(benchmark, xtraCs, xtraIncludeFolders, flags) {
+	var parLoops = {};
+	Clava.pushAst();
+
+	//copied from rebuildCodeAst()
+	var includeFolders = Array.from(xtraIncludeFolders);
+	includeFolders.push(benchmark.folder);
+
+	var dataStore = Clava.getData();
+	dataStore.setUserIncludes(includeFolders);
+	var flagString = concatFlags(flags);
+	dataStore.setFlags(flagString);
+
+	var cs = Array.from(xtraCs);
+	var expectedCPath = benchmark.folder + "/expected_output.c";
+	cs.push(expectedCPath);
+	
+	for(var c of cs) {
+		var clavaJPFile = ClavaJoinPoints.file(c);
+		Clava.addFile(clavaJPFile);
+	}
+
+	Clava.rebuild();
+
+	var ompPragmas = getOmpPragmas();
+
+	for(var pragma of ompPragmas) {
+		var loopId = pragma.target.id;
+		loopId = fixLoopId(loopId, benchmark);
+		var parLoop = {};
+		parLoop["pragma"] = pragma;
+		parLoop["isMainLoop"] = false;
+		parLoops[loopId] = parLoop;	
+	}
+	
+	Clava.popAst();
+	return parLoops;
+}
+
+function fixLoopId(loopId, benchmark) {
+	var newLoopId = "";
+
+	var lastSlashIndex = benchmark.c.lastIndexOf("/");
+	var filename = benchmark.c.substr(lastSlashIndex + 1);
+	var arrowIndex = loopId.indexOf("->");
+	var restOfId = loopId.substr(arrowIndex);
+
+	newLoopId = "file$" + filename + restOfId;
+
+	return newLoopId;
+}
+
 function buildAndRun(benchmark, version, loopGroupSizeLimit, nRuns, isPar, problemSizeFlag) {
 	var subFolder = "";
 	
@@ -765,7 +819,6 @@ function buildAndRun(benchmark, version, loopGroupSizeLimit, nRuns, isPar, probl
 		var exeOutput = executor.execute(exe.getAbsolutePath());
 		executors.push(executor);
 	}
-	
 
 	return executors;
 }
@@ -807,6 +860,7 @@ function createBenchGroupResultsObj(nRuns, loopGroupSizeLimit) {
 	benchGroupResultsObj["totalParLoops"] = 0;
 	benchGroupResultsObj["totalExecutionTimeInSec"] = 0;
 	benchGroupResultsObj["totalBenchmarks"] = 0;
+	benchGroupResultsObj["totalBenchmarkVersions"] = 0;
 	benchGroupResultsObj["benchmarks"] = [];
 
 	return benchGroupResultsObj;
@@ -894,6 +948,15 @@ function getSubMainLoopId(loopGroup, parLoops) {
 	}
 
 	return subMainLoopId;
+}
+
+function getOmpPragmas() {
+	var ompPragmas = [];
+
+	for(var result of Query.search('omp')) {
+		ompPragmas.push(result);
+	}
+	return ompPragmas;
 }
 
 function getObjFromCache(benchmark,  benchmarkGroup, problemSizeFlag, loopGroupSizeLimit, objectName) {

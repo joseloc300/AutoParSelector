@@ -36,7 +36,8 @@ aspectdef Polybench
 	var excludedFolders = ["fdtd-2d"];
 	var benchmarks = getSubFolders(sourceFolder, benchmarkFolders, allFolders, excludedFiles, excludedFolders);
 
-	polybenchResults["totalBenchmarks"] = benchmarks.length * problemSizeFlags3_2.length;
+	polybenchResults["totalBenchmarks"] = benchmarks.length;
+	polybenchResults["totalBenchmarkVersions"] = benchmarks.length * problemSizeFlags3_2.length;
 
 	var polybenchUtilsFolder = Io.getAbsolutePath(sourceFolder + "utilities/");
 	var polybenchCPath = Io.getPath(polybenchUtilsFolder, "polybench.c");
