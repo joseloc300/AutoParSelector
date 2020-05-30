@@ -70,7 +70,6 @@ aspectdef Polybench
 					Clava.popAst();
 					continue;
 				}
-				//parLoopGroups = getParLoopGroups(parLoops, loopGroupSizeLimit);
 				
 				parLoopGroups = getObjFromCache(benchmark, benchGroupName, problemSizeFlag, loopGroupSizeLimit, "parLoopGroups");
 				benchmarkResults = getObjFromCache(benchmark, benchGroupName, problemSizeFlag, loopGroupSizeLimit, "benchmarkResults");
@@ -88,6 +87,7 @@ aspectdef Polybench
 				benchmarkResults = createBenchResultsObj(benchmark, problemSizeFlag);
 				countLoopIterations(benchmark, parLoops, problemSizeFlag);
 				parLoopGroups = getParLoopGroups(parLoops, loopGroupSizeLimit);
+				getLoopInfo(parLoops);
 				addLoopInfo(parLoops, benchmarkResults);
 				writeObjToCache(benchmark, benchGroupName, problemSizeFlag, loopGroupSizeLimit, "parLoops", parLoops);
 				

@@ -27,12 +27,12 @@ aspectdef NAS
 	var nRuns = 3;
 	var loopGroupSizeLimit = 1;
 	var functionFilters = [];
-	var problemSizeFlags = ["-DCLASS_S", /*"-DCLASS_W", "-DCLASS_A", "-DCLASS_B", "-DCLASS_C", "-DCLASS_D", "-DCLASS_E"*/];
+	var problemSizeFlags = ["-DCLASS_S"/*, "-DCLASS_W", "-DCLASS_A", "-DCLASS_B", "-DCLASS_C", "-DCLASS_D", "-DCLASS_E"*/];
 
 	var NASResults = createBenchGroupResultsObj(nRuns, loopGroupSizeLimit);
 
 	var allFolders = ["BT", "CG", "EP", "FT", "IS", "LU", "MG", "SP", "UA"];
-	var foldersToGetExpectedC = ["BT", "CG", "EP", "FT", "IS", "LU", "MG", "SP", "UA"];
+	var foldersToGetExpectedC = ["BT", "EP", "FT", "IS", "LU", "MG"];
 	var excludedFiles = ["expected_output.c"];
 	var excludedFolders = ["test"];
 	var benchmarks = getSubFolders(sourceFolder, benchmarkFolders, allFolders, excludedFiles, excludedFolders);
@@ -47,7 +47,6 @@ aspectdef NAS
 	println("Processing benchmarks");
 	for (var benchmark of benchmarks) {
 		println("Processing: " + benchmark.folder);
-		//NEW
 
 		for(var problemSizeFlag of problemSizeFlags) {
 			println("Current problem size flag = " + problemSizeFlag);
@@ -75,7 +74,6 @@ aspectdef NAS
 					Clava.popAst();
 					continue;
 				}
-				//parLoopGroups = getParLoopGroups(parLoops, loopGroupSizeLimit);
 				
 				parLoopGroups = getObjFromCache(benchmark, benchGroupName, problemSizeFlag, loopGroupSizeLimit, "parLoopGroups");
 				benchmarkResults = getObjFromCache(benchmark, benchGroupName, problemSizeFlag, loopGroupSizeLimit, "benchmarkResults");
@@ -95,6 +93,7 @@ aspectdef NAS
 				benchmarkResults = createBenchResultsObj(benchmark, problemSizeFlag);
 				countLoopIterations(benchmark, parLoops, problemSizeFlag);
 				parLoopGroups = getParLoopGroups(parLoops, loopGroupSizeLimit);
+				getLoopInfo(parLoops);
 				addLoopInfo(parLoops, benchmarkResults);
 				writeObjToCache(benchmark, benchGroupName, problemSizeFlag, loopGroupSizeLimit, "parLoops", parLoops);
 				
