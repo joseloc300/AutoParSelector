@@ -19,7 +19,8 @@ aspectdef NAS
 		sourceFolder,
 		benchmarkFolders,
 		now,
-		readCache
+		readCache,
+		calculateCaches
 	end
 
 	var benchGroupName = "NAS";
@@ -27,7 +28,7 @@ aspectdef NAS
 	var nRuns = 3;
 	var loopGroupSizeLimit = 1;
 	var functionFilters = [];
-	var problemSizeFlags = ["-DCLASS_S"/*, "-DCLASS_W", "-DCLASS_A", "-DCLASS_B", "-DCLASS_C", "-DCLASS_D", "-DCLASS_E"*/];
+	var problemSizeFlags = ["-DCLASS_S", /*"-DCLASS_W", "-DCLASS_A", "-DCLASS_B", "-DCLASS_C", "-DCLASS_D", "-DCLASS_E"*/];
 
 	var NASResults = createBenchGroupResultsObj(nRuns, loopGroupSizeLimit);
 
@@ -40,16 +41,22 @@ aspectdef NAS
 	NASResults["totalBenchmarks"] = benchmarks.length;
 	NASResults["totalBenchmarkVersions"] = benchmarks.length * problemSizeFlags.length;
 
-	var xtraCs = [];
+	var autoParLoopItersFolder = Io.getAbsolutePath("extraIncludes/");
+	var autoParLoopItersHPath = Io.getPath(autoParLoopItersFolder, "autopar_loop_iters.h");
+	var autoParLoopItersCPath = Io.getPath(autoParLoopItersFolder, "autopar_loop_iters.c");
+
+	var xtraFiles = [];
 	var xtraIncludeFolders = [];
 
 	println("Number of benchmarks found: " + benchmarks.length);
 	println("Processing benchmarks");
 	for (var benchmark of benchmarks) {
 		println("Processing: " + benchmark.folder);
+		println("-new bench stack size = " + Clava.getStackSize());
 
 		for(var problemSizeFlag of problemSizeFlags) {
 			println("Current problem size flag = " + problemSizeFlag);
+			println("--new problem size stack size = " + Clava.getStackSize());
 		
 			Clava.pushAst();
 			var flags = [problemSizeFlag];
@@ -58,48 +65,82 @@ aspectdef NAS
 			}
 
 			var parLoops;
-			if(!readCache && foldersToGetExpectedC.includes(benchmark.name)) {
-				parLoops = getParLoopsFromPrevOutput(benchmark, xtraCs, xtraIncludeFolders, flags);
-			}
-			
-			rebuildCodeAst(benchmark, xtraCs, xtraIncludeFolders, flags);
-
-			
 			var parLoopGroups;
 			var benchmarkResults;
+			var loopIterInfo;
+			
+			if(!readCache && foldersToGetExpectedC.includes(benchmark.name)) {
+				//println("a");
+				parLoops = getParLoopsFromPrevOutput(benchmark, xtraFiles, xtraIncludeFolders, flags);
+				//println("b");
+			}
+
+			//println("c");
+			rebuildCodeAst(benchmark, xtraFiles, xtraIncludeFolders, flags);
+			//println("d");
 			
 			if(readCache) {
 				parLoops = getObjFromCache(benchmark, benchGroupName, problemSizeFlag, loopGroupSizeLimit, "parLoops");
-				if(parLoops["nParLoops"] == 0) {
-					Clava.popAst();
-					continue;
-				}
-				
-				parLoopGroups = getObjFromCache(benchmark, benchGroupName, problemSizeFlag, loopGroupSizeLimit, "parLoopGroups");
-				benchmarkResults = getObjFromCache(benchmark, benchGroupName, problemSizeFlag, loopGroupSizeLimit, "benchmarkResults");
-			}
-			else {
-				if(!foldersToGetExpectedC.includes(benchmark.name)) {
-					Clava.pushAst();
-					parLoops = getParLoops(functionFilters);
-					Clava.popAst();
-				}
-
 				if(Object.keys(parLoops).length == 0) {
 					Clava.popAst();
 					continue;
 				}
-				
+				loopIterInfo = getObjFromCache(benchmark, benchGroupName, problemSizeFlag, loopGroupSizeLimit, "loopIterInfo");
+				parLoopGroups = getObjFromCache(benchmark, benchGroupName, problemSizeFlag, loopGroupSizeLimit, "parLoopGroups");
+				benchmarkResults = getObjFromCache(benchmark, benchGroupName, problemSizeFlag, loopGroupSizeLimit, "benchmarkResults");
+			}
+			else {
+				//println("e");
+				if(!foldersToGetExpectedC.includes(benchmark.name)) {
+					//println("f");
+					Clava.pushAst();
+					parLoops = getParLoops(functionFilters);
+					Clava.popAst();
+					//println("g");
+				}
+
+				//println("h");
+				if(Object.keys(parLoops).length == 0) {
+					//println("i");
+					Clava.popAst();
+					writeObjToCache(benchmark, benchGroupName, problemSizeFlag, loopGroupSizeLimit, "parLoops", parLoops);
+					//println("j");
+					continue;
+				}
+				//println("k");
 				benchmarkResults = createBenchResultsObj(benchmark, problemSizeFlag);
-				countLoopIterations(benchmark, parLoops, problemSizeFlag);
-				parLoopGroups = getParLoopGroups(parLoops, loopGroupSizeLimit);
-				getLoopInfo(parLoops);
-				addLoopInfo(parLoops, benchmarkResults);
-				writeObjToCache(benchmark, benchGroupName, problemSizeFlag, loopGroupSizeLimit, "parLoops", parLoops);
+				//println("l");
 				
+				Clava.pushAst();
+				var newExtraIncludeFolders = Array.from(xtraIncludeFolders);
+				newExtraIncludeFolders.push(autoParLoopItersFolder);
+				var newExtraFiles = Array.from(xtraFiles);
+				newExtraFiles.push(autoParLoopItersHPath, autoParLoopItersCPath);
+
+				rebuildCodeAst(benchmark, newExtraFiles, newExtraIncludeFolders, flags);
+				loopIterInfo = countLoopIterations(benchmark, parLoops, problemSizeFlag, loopGroupSizeLimit);
+				Clava.popAst();
+				//println("m");
+
+				parLoopGroups = getParLoopGroups(parLoops, loopGroupSizeLimit);
+				//println("n");
+				getLoopInfo(parLoops, loopIterInfo);
+				//println("o");
+				addLoopInfo(parLoops, benchmarkResults);
+				//println("p");
+				writeObjToCache(benchmark, benchGroupName, problemSizeFlag, loopGroupSizeLimit, "parLoops", parLoops);
+				writeObjToCache(benchmark, benchGroupName, problemSizeFlag, loopGroupSizeLimit, "loopIterInfo", loopIterInfo);
 				writeObjToCache(benchmark, benchGroupName, problemSizeFlag, loopGroupSizeLimit, "parLoopGroups", parLoopGroups);
 				writeObjToCache(benchmark, benchGroupName, problemSizeFlag, loopGroupSizeLimit, "benchmarkResults", benchmarkResults);
-				
+				//println("q");
+
+				//Clava.popAst();
+			}
+
+			//if only calculating caches skip timing the benchmarks
+			if(calculateCaches) {
+				Clava.popAst();
+				continue;
 			}
 			
 			NASResults["totalParLoops"] += Object.keys(parLoops).length;
@@ -108,6 +149,8 @@ aspectdef NAS
 			
 			var version = 0;
 			for (var loopGroup of parLoopGroups) {
+				println("---new loopGroup stack size = " + Clava.getStackSize());
+			
 				Clava.pushAst();
 	
 				addPragmas(loopGroup, parLoops);
