@@ -28,7 +28,7 @@ aspectdef NAS
 	var nRuns = 3;
 	var loopGroupSizeLimit = 1;
 	var functionFilters = [];
-	var problemSizeFlags = ["-DCLASS_S", /*"-DCLASS_W", "-DCLASS_A", "-DCLASS_B", "-DCLASS_C", "-DCLASS_D", "-DCLASS_E"*/];
+	var problemSizeFlags = ["-DCLASS_S", "-DCLASS_W", "-DCLASS_A", "-DCLASS_B", "-DCLASS_C", "-DCLASS_D", "-DCLASS_E"];
 
 	var NASResults = createBenchGroupResultsObj(nRuns, loopGroupSizeLimit);
 

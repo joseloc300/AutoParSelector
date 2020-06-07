@@ -1184,7 +1184,8 @@ function buildAndRun(benchmark, version, loopGroupSizeLimit, nRuns, isPar, probl
 
 	cmaker.addCurrentAst();
 	cmaker.addLibs("m");
-	cmaker.addFlags("-O3");	
+	cmaker.addFlags("-O3");
+	cmaker.addFlags("-mcmodel=medium");
 	if(isPar)
 		cmaker.addFlags("-fopenmp");
 
