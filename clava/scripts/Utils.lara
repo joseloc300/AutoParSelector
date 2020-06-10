@@ -19,7 +19,6 @@ function getLoopIndexes(loopGroup, parLoops) {
 }
 
 function countLoopIterations(benchmark, parLoops, problemSizeFlag, loopGroupSizeLimit) {
-	//println("countLoopIterations() start");
 
 	var loopIterInfo = {};
 
@@ -93,8 +92,6 @@ function countLoopIterations(benchmark, parLoops, problemSizeFlag, loopGroupSize
 	var consoleOutput = executorPar.getConsoleOutput();
 
 	getLoopIterationStats(loopIndexToId, consoleOutput, parLoops, loopIterInfo, nLoops);
-
-	//println("countLoopIterations() end");
 
 	return loopIterInfo;	
 }
@@ -390,22 +387,10 @@ function getJPDescendants($targetJp, $mainLoop, instructionInfo, loopIterInfo) {
 			instructionInfo["joinpoints"][jpType] += $descendants[jpType].length;
 			instructionInfo["joinpointsTotal"] += $descendants[jpType].length;
 		}
-		
-
-		//instructionInfo["recursiveJoinpoints"][jpType] += $descendants[jpType].length;
-		//instructionInfo["recursiveJoinpointsTotal"] += $descendants[jpType].length;
 
 		//go $jp by $jp and calculate avg times they will be run per main loop iteration
 		for(var $descendant of $descendants[jpType]) {
 			var iterMultiplier = getJpMultiplier($descendant, $mainLoop, loopIterInfo);
-			
-			/*
-			var $currentLoop = $descendant.ancestor("loop");
-			while($currentLoop.id != $mainLoop.id) {
-				iterMultiplier *= loopIterInfo[$currentLoop.id]["avgIterations"];
-				$currentLoop = $currentLoop.ancestor("loop");
-			}
-			*/
 			instructionInfo["recursiveJoinpoints"][jpType] += iterMultiplier;
 			instructionInfo["recursiveJoinpointsTotal"] += iterMultiplier;
 			$descendants["total"] += iterMultiplier;
@@ -621,12 +606,6 @@ function castAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo) {
 	for(var $cast of $descendants["cast"]) {
 		var iterMultiplier = getJpMultiplier($cast, $mainLoop, loopIterInfo);
 		instructionInfo["castExplicit"] += iterMultiplier;
-		/*
-		if(typeof $cast.implicitCast === "undefined")
-			instructionInfo["castExplicit"] += iterMultiplier;
-		else
-			instructionInfo["castImplicit"] += iterMultiplier;
-		*/
 	}
 }
 
@@ -709,9 +688,9 @@ function varrefAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo) 
 
 
 function addResults(benchmarkResults, measures, executors, version, loopGroup, parLoops) {
+	var MPREFIX_LENGTH = 8;
 	var isPar = version >= 0;
 	
-	//var loopIds = Object.keys(parLoops);
 	var loopIndexes = getLoopIndexes(loopGroup, parLoops);
 	var mainLoopIds = getMainLoopIds(parLoops);
 	var mainLoopIndexes = getLoopIndexes(mainLoopIds, parLoops);
@@ -731,7 +710,9 @@ function addResults(benchmarkResults, measures, executors, version, loopGroup, p
 
 	for(var measure of measures) {
 		var measureInfo = {};
-		measureInfo["loopIndex"] = parseInt(measure._prefix);
+		var loopIndex = measure._prefix.substring(MPREFIX_LENGTH);
+		loopIndex = parseInt(loopIndex);
+		measureInfo["loopIndex"] = parseInt(loopIndex);
 		measureInfo["runs"] = [];
 		var runId = 0;
 		for(var executor of executors) {
@@ -745,8 +726,8 @@ function addResults(benchmarkResults, measures, executors, version, loopGroup, p
 
 		if(isPar) {
 			info["measures"].push(measureInfo);
-			if(mainLoopIndexes.includes(parseInt(measure._prefix)))
-				info["mainLoop"] = parseInt(measure._prefix);
+			if(mainLoopIndexes.includes(loopIndex))
+				info["mainLoop"] = loopIndex;
 		}
 		else {
 			benchmarkResults["seq"].push(measureInfo);
@@ -860,7 +841,8 @@ function addTimerSeq(parallelLoopIds, parLoops) {
 			continue;
 		}
 
-		var measure = new CustomExecutionTimeMetric(parLoops[result["loop"].id]["index"].toString());
+		var measurePrefix = "mprefix_" + parLoops[result["loop"].id]["index"].toString();
+		var measure = new CustomExecutionTimeMetric(measurePrefix);
 		measures.push(measure);
 		
 		measure.instrument(result["loop"]);
@@ -876,7 +858,8 @@ function addTimerMainLoop(mainLoopId, mainLoopIndex) {
 			continue;
 		}
 
-		measure = new CustomExecutionTimeMetric(mainLoopIndex);	
+		var measurePrefix = "mprefix_" + mainLoopIndex;
+		measure = new CustomExecutionTimeMetric(measurePrefix);	
 		measure.instrument(result["loop"], undefined, true);
 		break;
 	}
@@ -885,30 +868,29 @@ function addTimerMainLoop(mainLoopId, mainLoopIndex) {
 
 function addTimerPar(loopGroup, parLoops) {
 	var measures = [];
-	var $loopJps = getLoopsFromIds(loopGroup);
 	var mainLoopIds = getMainLoopIds(parLoops);
 	var foundMainLoop = false;
 
+	
 	for(var result of Query.search('pragma')) {
 		if(result.name != "omp")
 			continue;
 
 		var $pragmaLoop = result.target;
+
 		if(!loopGroup.includes($pragmaLoop.id))
 			continue;
-		
-		var measurePrefix = parLoops[$pragmaLoop.id]["index"].toString();
-		var measure = new CustomExecutionTimeMetric(measurePrefix);
-		measures.push(measure);
 
-		var addExitStatement = false;
-		if(mainLoopIds.includes($pragmaLoop.id)) {
-			addExitStatement = true;
-			foundMainLoop = true;
-		}
-		
-		measure.instrument(result, $pragmaLoop, addExitStatement);
-		
+		if(!mainLoopIds.includes($pragmaLoop.id))
+			continue;
+
+		var foundMainLoop = true;
+
+		var $pragmaLoop = result.target;
+		var measurePrefix = "mprefix_" + parLoops[$pragmaLoop.id]["index"].toString();
+		var measure = new CustomExecutionTimeMetric(measurePrefix);
+		measures.push(measure);		
+		measure.instrument(result, $pragmaLoop, true);	
 	}
 
 	if(!foundMainLoop) {
@@ -916,12 +898,6 @@ function addTimerPar(loopGroup, parLoops) {
 		var mainLoopMeasure = findAndTimeMainLoop(subMainLoopId, parLoops, mainLoopIds);
 		measures.push(mainLoopMeasure);
 	}
-
-	
-	//println("measures.length = " + measures.length);
-	//println("measure[0]._prefix = " + measures[0]._prefix);
-
-	//exit(0);
 
 	return measures;
 }
@@ -935,6 +911,7 @@ function findAndTimeMainLoop(subMainLoopId, parLoops, mainLoopIds) {
 		if(checkRankDescendant($subMainLoop.rank, $mainLoop.rank)) {
 			var mainLoopIndex = parLoops[$mainLoop.id]["index"].toString();
 			mainLoopMeasure = addTimerMainLoop($mainLoop.id, mainLoopIndex);
+			break;
 		}
 	}
 
@@ -1064,25 +1041,14 @@ function createParLoopObj() {
 }
 
 function getParLoops(functionFilters) {
-	//println("getParLoops() start");
-
 	var loops = getLoopsFiltered(functionFilters, true);
-	
-	//Parallelize.forLoops(loops);
 
 	var pragmas = Parallelize.getForLoopsPragmas(loops, false, true);
-	//var astIds = Object.keys(pragmas["parallelLoops"]);
 	var loopIds = Object.keys(pragmas["parallelLoops"]);
-
-	//println("loopIds\n" + loopIds);
-
-	//println("astIds.length = " + astIds.length);
-
 
 	var parLoops = {};
 	for(var loop of loops) {
 		if(loopIds.includes(loop.id)) {
-			//println("found loop id\n");
 			var parLoop = createParLoopObj();
 			var parentLoopId = "NULL";
 			if(loop.nestedLevel > 0) {
@@ -1096,12 +1062,8 @@ function getParLoops(functionFilters) {
 			parLoop["parentLoopId"] = parentLoopId;
 			parLoops[loop.id] = parLoop;	
 
-			//println("\n" + parLoop["id"]);
-			//println(parLoop["ompPragma"] + "\n");
 		}
 	}
-
-	//println("getParLoops() end");
 	
 	return parLoops;
 }

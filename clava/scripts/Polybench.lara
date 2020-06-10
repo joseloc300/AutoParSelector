@@ -27,7 +27,7 @@ aspectdef Polybench
 	var nRuns = 3;
 	var loopGroupSizeLimit = 1;
 	var functionFilters = ["kernel_"];
-	var problemSizeFlags3_2 = [/*"-DMINI_DATASET", "-DSMALL_DATASET", "-DSTANDARD_DATASET", "-DLARGE_DATASET",*/"-DEXTRALARGE_DATASET"];
+	var problemSizeFlags3_2 = ["-DMINI_DATASET", "-DSMALL_DATASET", "-DSTANDARD_DATASET", "-DLARGE_DATASET","-DEXTRALARGE_DATASET"];
 	//var problemSizeFlags4_2 = ["-DMINI_DATASET", "-DSMALL_DATASET", "-DMEDIUM_DATASET", "-DLARGE_DATASET", "-DEXTRALARGE_DATASET"];
 
 	var polybenchResults = createBenchGroupResultsObj(nRuns, loopGroupSizeLimit);
