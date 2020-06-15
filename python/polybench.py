@@ -30,8 +30,8 @@ def main():
     global loop_features, loop_targets
     loop_features, loop_targets = load_data()
 
-
-    main_algorithms()
+    lasso()
+    # main_algorithms()
     # supervised_learning()
     # unsupervised_learning()
 
@@ -58,7 +58,7 @@ def main_algorithms():
 
 def svr():
     train_ratio = 0.8
-    x_train, x_test, y_train, y_test = train_test_split(loop_features, loop_targets, test_size=1-train_ratio)
+    x_train, x_test, y_train, y_test = train_test_split(loop_features, loop_targets, train_size=train_ratio)
 
     reg = SVR(kernel="linear")
     reg.fit(x_train, y_train)
@@ -100,7 +100,7 @@ def linear_models():
 # 1.1.1
 def ordinary_least_squares():
     train_ratio = 0.8
-    x_train, x_test, y_train, y_test = train_test_split(loop_features, loop_targets, test_size=1-train_ratio)
+    x_train, x_test, y_train, y_test = train_test_split(loop_features, loop_targets, train_size=train_ratio)
 
     reg = linear_model.LinearRegression()
     reg.fit(x_train, y_train)
@@ -114,7 +114,7 @@ def ordinary_least_squares():
 # 1.1.2
 def ridge_regression():
     train_ratio = 0.8
-    x_train, x_test, y_train, y_test = train_test_split(loop_features, loop_targets, test_size=1-train_ratio)
+    x_train, x_test, y_train, y_test = train_test_split(loop_features, loop_targets, train_size=train_ratio)
 
     reg = linear_model.Ridge(alpha=0.5)
     reg.fit(x_train, y_train)
@@ -134,9 +134,9 @@ def ridge_regression():
 # 1.1.3
 def lasso():
     train_ratio = 0.8
-    x_train, x_test, y_train, y_test = train_test_split(loop_features, loop_targets, test_size=1-train_ratio)
+    x_train, x_test, y_train, y_test = train_test_split(loop_features, loop_targets, train_size=train_ratio)
 
-    reg = linear_model.Lasso(alpha=0.5)
+    reg = linear_model.Lasso(alpha=1.0, max_iter=100, tol=0.5)
     reg.fit(x_train, y_train)
 
     score = reg.score(x_test, y_test)
@@ -144,7 +144,7 @@ def lasso():
     print("Lasso")
     print(score)
 
-    reg_2 = linear_model.LassoCV(eps=0.001, n_alphas=100, cv=None)
+    reg_2 = linear_model.LassoCV(tol=0.5, cv=5)
     reg_2.fit(x_train, y_train)
 
     score_2 = reg_2.score(x_test, y_test)
@@ -156,7 +156,7 @@ def lasso():
 # 1.1.5
 def elastic_net():
     train_ratio = 0.8
-    x_train, x_test, y_train, y_test = train_test_split(loop_features, loop_targets, test_size=1-train_ratio)
+    x_train, x_test, y_train, y_test = train_test_split(loop_features, loop_targets, train_size=train_ratio)
 
     reg = linear_model.ElasticNet(alpha=1.0, l1_ratio=0.5)
     reg.fit(x_train, y_train)
@@ -178,7 +178,7 @@ def elastic_net():
 # 1.1.7
 def lars():
     train_ratio = 0.8
-    x_train, x_test, y_train, y_test = train_test_split(loop_features, loop_targets, test_size=1-train_ratio)
+    x_train, x_test, y_train, y_test = train_test_split(loop_features, loop_targets, train_size=train_ratio)
 
     reg = linear_model.Lars()
     reg.fit(x_train, y_train)
@@ -200,7 +200,7 @@ def lars():
 # 1.10.2
 def decision_tree_regressor():
     train_ratio = 0.8
-    x_train, x_test, y_train, y_test = train_test_split(loop_features, loop_targets, test_size=1-train_ratio)
+    x_train, x_test, y_train, y_test = train_test_split(loop_features, loop_targets, train_size=train_ratio)
 
     reg_1 = DecisionTreeRegressor(max_depth=2)
     reg_2 = DecisionTreeRegressor(max_depth=5)
@@ -219,7 +219,7 @@ def decision_tree_regressor():
 # 1.15
 def isotonic_regression():
     train_ratio = 0.8
-    x_train, x_test, y_train, y_test = train_test_split(loop_features, loop_targets, test_size=1-train_ratio)
+    x_train, x_test, y_train, y_test = train_test_split(loop_features, loop_targets, train_size=train_ratio)
 
     reg = IsotonicRegression()
     # reg.fit(x_train, y_train)
@@ -317,9 +317,6 @@ def parse_benchmark_simple(benchmark, runs_per_version):
         # loop_info_copy = np.append(loop_info_copy, loops_family_info[loop_index_str]["descendants"])
 
         loop_info_copy = np.append(loop_info_copy, len(par_loops))
-
-        print(loop_info_copy)
-        print(speedup)
 
         bench_loop_features.append(loop_info_copy)
         bench_loop_targets.append(speedup)

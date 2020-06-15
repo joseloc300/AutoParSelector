@@ -25,8 +25,8 @@ aspectdef ProgramAnalyzer
 
 	var benchmarks = getSubFolders(params);
 
-	AnalyzerResults["totalBenchmarks"] = benchmarks.length;
-	AnalyzerResults["totalBenchmarkVersions"] = benchmarks.length * params["problemSizeFlags"].length;
+	//AnalyzerResults["totalBenchmarks"] = benchmarks.length;
+	//AnalyzerResults["totalBenchmarkVersions"] = benchmarks.length * params["problemSizeFlags"].length;
 
 	var autoParLoopItersFolder = Io.getAbsolutePath("extraIncludes/");
 	var autoParLoopItersHPath = Io.getPath(autoParLoopItersFolder, "autopar_loop_iters.h");
@@ -88,6 +88,13 @@ aspectdef ProgramAnalyzer
 					removedPragmas = testPragmas(benchmark, parLoops, problemSizeFlag, params["loopGroupSizeLimit"]);
 				else
 					removedPragmas = {};
+
+				//skip if all pragmas are removed
+				if(Object.keys(parLoops).length == 0) {
+					Clava.popAst();
+					writeObjToCache(cacheParamsObj, "parLoops", parLoops);
+					continue;
+				}
 				
 				Clava.pushAst();
 				var newExtraIncludeFolders = Array.from(params["xtraIncludeFolders"]);
@@ -130,7 +137,7 @@ aspectdef ProgramAnalyzer
 				addPragmas(loopGroup, parLoops);
 	
 				var measuresPar = addTimerPar(loopGroup, parLoops);
-				var executorsPar = buildAndRun(benchmark, version, params["loopGroupSizeLimit"], params["nRuns"], true, problemSizeFlag);
+				var executorsPar = buildAndRun(benchmark, version, params["loopGroupSizeLimit"], params["nRuns"], true, problemSizeFlag);	
 				addResults(benchmarkResults, measuresPar, executorsPar, version, loopGroup, parLoops);
 				version++;
 				Clava.popAst();
@@ -147,7 +154,11 @@ aspectdef ProgramAnalyzer
 			
 			AnalyzerResults["benchmarks"].push(benchmarkResults);
 			Io.writeJson(benchmark.outputFolder + problemSizeFlag + "/results.json", benchmarkResults);
+
+			AnalyzerResults["totalBenchmarkVersions"] += 1;
 		}
+
+		AnalyzerResults["totalBenchmarks"] += 1;
 	}
 	var end_time = performance.now();
 	AnalyzerResults["totalExecutionTimeInSec"] = (end_time - start_time) / 1000;
