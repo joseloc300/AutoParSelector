@@ -1,0 +1,49 @@
+{
+	"benchGroupName": "NAS",
+	"sourceFolder": "./sources/NAS/",
+	"benchmarkFolders": [
+		"SP"
+	],
+	"nRuns": 3,
+	"loopGroupSizeLimit": 1,
+	"functionFilters": [
+		""
+	],
+	"problemSizeFlags": [
+		"-DCLASS_S"
+	],
+	"defaultFlag": "-DCLASS_W",
+	"allFolders": [
+		"BT",
+		"CG",
+		"EP",
+		"FT",
+		"IS",
+		"LU",
+		"MG",
+		"SP",
+		"UA"
+	],
+	"foldersToGetExpectedC": [
+		"BT",
+		"EP",
+		"FT",
+		"IS",
+		"LU",
+		"MG"
+	],
+	"excludedFiles": [
+		"expected_output.c"
+	],
+	"excludedFolders": [
+		"test"
+	],
+	"xtraFiles": [],
+	"xtraIncludeFolders": [],
+	"flags": {
+		"readCache": false,
+		"readFromExpectedOutput": true,
+		"testPragmas": true,
+		"onlyCalculateCaches": false
+	}
+}

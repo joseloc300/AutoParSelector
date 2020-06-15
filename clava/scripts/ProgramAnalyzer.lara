@@ -1,0 +1,158 @@
+import clava.autopar.Parallelize;
+import clava.autopar.ParallelizeLoop;
+import lara.Io;
+import lara.util.LocalFolder;
+import clava.ClavaJoinPoints;
+import lara.cmake.CMaker;
+import weaver.util.WeaverDataStore;
+import lara.code.Timer;
+import lara.metrics.ExecutionTimeMetric;
+import weaver.Query;
+import lara.Strings;
+
+import CustomExecutionTimeMetric;
+import CustomParallelize;
+import Utils;
+
+aspectdef ProgramAnalyzer
+	input
+		params,
+		now
+	end
+
+	var start_time = performance.now();
+	var AnalyzerResults = createBenchGroupResultsObj(params["nRuns"], params["loopGroupSizeLimit"]);
+
+	var benchmarks = getSubFolders(params);
+
+	AnalyzerResults["totalBenchmarks"] = benchmarks.length;
+	AnalyzerResults["totalBenchmarkVersions"] = benchmarks.length * params["problemSizeFlags"].length;
+
+	var autoParLoopItersFolder = Io.getAbsolutePath("extraIncludes/");
+	var autoParLoopItersHPath = Io.getPath(autoParLoopItersFolder, "autopar_loop_iters.h");
+	var autoParLoopItersCPath = Io.getPath(autoParLoopItersFolder, "autopar_loop_iters.c");
+
+	println("Number of benchmarks found: " + benchmarks.length);
+	println("Processing benchmarks");
+	for (var benchmark of benchmarks) {
+		println("Processing: " + benchmark.folder);
+
+		for(var problemSizeFlag of params["problemSizeFlags"]) {
+			println("Current problem size flag = " + problemSizeFlag);
+		
+			Clava.pushAst();
+			var flags = [problemSizeFlag];
+			if(problemSizeFlag == params["defaultFlag"]) {
+				flags = [];
+			}
+
+			var parLoops;
+			var parLoopGroups;
+			var benchmarkResults;
+			var loopIterInfo;
+			var removedPragmas;
+
+			rebuildCodeAst(benchmark, params["xtraFiles"], params["xtraIncludeFolders"], flags);
+			
+			if(params["flags"]["readCache"]) {
+				var cacheParamsObj = createCacheParamsObj(benchmark, problemSizeFlag, params["loopGroupSizeLimit"]);
+				parLoops = getObjFromCache(cacheParamsObj, "parLoops");
+				if(Object.keys(parLoops).length == 0) {
+					Clava.popAst();
+					continue;
+				}
+				loopIterInfo = getObjFromCache(cacheParamsObj, "loopIterInfo");
+				parLoopGroups = getObjFromCache(cacheParamsObj, "parLoopGroups");
+				benchmarkResults = getObjFromCache(cacheParamsObj, "benchmarkResults");
+			}
+			else {
+				var cacheParamsObj = createCacheParamsObj(benchmark, problemSizeFlag, params["loopGroupSizeLimit"]);
+			
+				if(params["foldersToGetExpectedC"].includes(benchmark.name)) {
+					parLoops = getParLoopsFromPrevOutput(benchmark, params["xtraFiles"], params["xtraIncludeFolders"], flags);
+				}
+				else {
+					Clava.pushAst();
+					parLoops = getParLoops(params["functionFilters"]);
+					Clava.popAst();
+				}
+
+				if(Object.keys(parLoops).length == 0) {
+					Clava.popAst();
+					writeObjToCache(cacheParamsObj, "parLoops", parLoops);
+					continue;
+				}
+				
+				//test if all pragmas are functioning
+				if(params["flags"]["testPragmas"])
+					removedPragmas = testPragmas(benchmark, parLoops, problemSizeFlag, params["loopGroupSizeLimit"]);
+				else
+					removedPragmas = {};
+				
+				Clava.pushAst();
+				var newExtraIncludeFolders = Array.from(params["xtraIncludeFolders"]);
+				newExtraIncludeFolders.push(autoParLoopItersFolder);
+				var newExtraFiles = Array.from(params["xtraFiles"]);
+				newExtraFiles.push(autoParLoopItersHPath, autoParLoopItersCPath);
+
+				rebuildCodeAst(benchmark, newExtraFiles, newExtraIncludeFolders, flags);
+				loopIterInfo = countLoopIterations(benchmark, parLoops, problemSizeFlag, params["loopGroupSizeLimit"]);
+				Clava.popAst();
+
+				parLoopGroups = getParLoopGroups(parLoops, params["loopGroupSizeLimit"]);
+				getLoopInfo(parLoops, loopIterInfo);
+
+				benchmarkResults = createBenchResultsObj(benchmark, problemSizeFlag);
+				addLoopInfo(parLoops, benchmarkResults);
+
+				
+				writeObjToCache(cacheParamsObj, "parLoops", parLoops);
+				writeObjToCache(cacheParamsObj, "removedPragmas", removedPragmas);
+				writeObjToCache(cacheParamsObj, "loopIterInfo", loopIterInfo);
+				writeObjToCache(cacheParamsObj, "parLoopGroups", parLoopGroups);
+				writeObjToCache(cacheParamsObj, "benchmarkResults", benchmarkResults);
+			}
+
+			//if only calculating caches skip timing the benchmarks
+			if(params["flags"]["onlyCalculateCaches"]) {
+				Clava.popAst();
+				continue;
+			}
+			
+			AnalyzerResults["totalParLoops"] += Object.keys(parLoops).length;
+			AnalyzerResults["totalVersions"] += parLoopGroups.length;
+			AnalyzerResults["totalRuns"] += parLoopGroups.length * params["nRuns"];
+			
+			var version = 0;
+			for (var loopGroup of parLoopGroups) {
+				Clava.pushAst();
+	
+				addPragmas(loopGroup, parLoops);
+	
+				var measuresPar = addTimerPar(loopGroup, parLoops);
+				var executorsPar = buildAndRun(benchmark, version, params["loopGroupSizeLimit"], params["nRuns"], true, problemSizeFlag);
+				addResults(benchmarkResults, measuresPar, executorsPar, version, loopGroup, parLoops);
+				version++;
+				Clava.popAst();
+			}
+			
+			var mainLoopIds = getMainLoopIds(parLoops);
+	
+			var measuresSeq = addTimerSeq(mainLoopIds, parLoops);
+			var executorsSeq = buildAndRun(benchmark, version, params["loopGroupSizeLimit"], params["nRuns"], false, problemSizeFlag);
+			
+			version = -1;
+			addResults(benchmarkResults, measuresSeq, executorsSeq, version, loopGroup, parLoops);
+			Clava.popAst();
+			
+			AnalyzerResults["benchmarks"].push(benchmarkResults);
+			Io.writeJson(benchmark.outputFolder + problemSizeFlag + "/results.json", benchmarkResults);
+		}
+	}
+	var end_time = performance.now();
+	AnalyzerResults["totalExecutionTimeInSec"] = (end_time - start_time) / 1000;
+	
+	Io.writeJson("./results/" + params["benchGroupName"] + "_" + now.toISOString() + ".json", AnalyzerResults);
+	println("Finished processing " + params["benchGroupName"]);
+
+end

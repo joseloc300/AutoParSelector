@@ -1,5 +1,6 @@
 import Polybench;
 import NAS;
+import ProgramAnalyzer;
 
 import clava.Clava;
 import lara.Io;
@@ -15,12 +16,56 @@ aspectdef Launcher
 
 	var now = new Date(Date.now());
 
+	//createParamsObj("polybench-c-3.2");
+	//createParamsObj("NAS");
+
+	var polybench_c_3_2_Params = readParamsFromPath("./params/polybench-c-3.2.json");
+	call ProgramAnalyzer(polybench_c_3_2_Params, now);
+
+	//var NASparams = readParamsFromPath("./params/NAS.json");
+	//call ProgramAnalyzer(NASparams, now);
+
 	//call Polybench("./sources/polybench-c-3.2/", ["all"], now, false, false);
 	//call Polybench("./sources/polybench-c-3.2/", ["datamining", "linear-algebra", "medley", "stencils"], now, true, false);
 	//call Polybench("./sources/polybench-c-3.2/", ["datamining/correlation"], now, false, false);
 
-	call NAS("./sources/NAS/", ["BT"], now, false, false);
+	//call NAS("./sources/NAS/", ["BT"], now, false, false);
 	//call NAS("./sources/NAS/", ["BT", "CG", "EP", "FT", "IS", "LU", "MG", "SP", "UA"], now, true, false);
 	//call NAS("./sources/NAS/", ["all"], now, true, false);
 	
 end
+
+
+function createParamsObj(filename) {
+	var params = {};
+
+	params["benchGroupName"] = "";
+	params["sourceFolder"] = "";
+	params["benchmarkFolders"] = [];
+	params["nRuns"] = 0;
+	params["loopGroupSizeLimit"] = 0;
+	params["functionFilters"] = [];
+	params["problemSizeFlags"] = [];
+	params["defaultFlag"] = "";
+	params["allFolders"] = [];
+	params["foldersToGetExpectedC"] = [];
+	params["excludedFiles"] = [];
+	params["excludedFolders"] = [];
+	params["xtraFiles"] = [];
+	params["xtraIncludeFolders"] = [];
+	
+	params["flags"] = {};
+	params["flags"]["readCache"] = false;
+	params["flags"]["readFromExpectedOutput"] = false;
+	params["flags"]["testPragmas"] = false;
+	params["flags"]["onlyCalculateCaches"] = false;
+
+	var path = "./params/" + filename + ".json";
+	Io.writeJson(path, params);
+}
+
+function readParamsFromPath(filepath) {
+	var paramsObj = Io.readJson(filepath);
+
+	return paramsObj;
+}

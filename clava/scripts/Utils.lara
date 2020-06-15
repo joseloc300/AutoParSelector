@@ -24,6 +24,18 @@ function countLoopIterations(benchmark, parLoops, problemSizeFlag, loopGroupSize
 
 	var functionFilters = ["autopar_init_array", "autopar_array_exit_function"];
 	var $allLoops = getLoopsFiltered(functionFilters, false);
+	
+	
+	//filter non-"for" loops
+	for(var i = 0; i < $allLoops.length; i++) {
+		var $loop = $allLoops[i];
+		if($loop.kind != "for") {
+			$allLoops.splice(i, 1);
+			println("removed elem");
+		}
+	}
+
+
 	var allLoopIds = Object.keys($allLoops);
 	var nLoops = allLoopIds.length;
 
@@ -56,8 +68,6 @@ function countLoopIterations(benchmark, parLoops, problemSizeFlag, loopGroupSize
 	var loopIndexToId = [];
 	var index = 0;
 	for(var $loop of $allLoops) {
-		if($loop.kind != "for")
-			continue;
 		
 		loopIndexToId.push($loop.id);
 		loopIterInfo[$loop.id] = createLoopIterationObj();
@@ -82,14 +92,19 @@ function countLoopIterations(benchmark, parLoops, problemSizeFlag, loopGroupSize
 			$loop.iterationsExpr.code + ") " + "autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].min_iters = " + 
 			$loop.iterationsExpr.code + ";\n";
 
+		
 		$loop.insertBefore(loopCode);
-		if($loop.nestedLevel == 0 && Object.keys(parLoops).contains($loop.id))
+		if($loop.nestedLevel == 0 && Object.keys(parLoops).contains($loop.id)) {
 			$loop.insertBefore(parLoops[$loop.id]["ompPragma"]);
+		}
+		
 		index++;
 	}
 	
-	var executorPar = buildAndRun(benchmark, -1, loopGroupSizeLimit, 1, true, problemSizeFlag)[0];
+	var executorPar = buildAndRun(benchmark, "iterCounter", loopGroupSizeLimit, 1, true, problemSizeFlag)[0];
 	var consoleOutput = executorPar.getConsoleOutput();
+
+	Io.writeFile("./logs/consoleOutput2.txt", consoleOutput);
 
 	getLoopIterationStats(loopIndexToId, consoleOutput, parLoops, loopIterInfo, nLoops);
 
@@ -158,9 +173,9 @@ function getLoopIterationStats(loopIndexToId, consoleOutput, parLoops, loopIterI
 		if(loopIterInfo[loopId]["avgIterations"] != 0)
 			continue;
 		
-		loopIterInfo[loopId]["maxIterations"] = -1;
-		loopIterInfo[loopId]["minIterations"] = -1;
-		loopIterInfo[loopId]["avgIterations"] = -1;
+		loopIterInfo[loopId]["maxIterations"] = 0;
+		loopIterInfo[loopId]["minIterations"] = 0;
+		loopIterInfo[loopId]["avgIterations"] = 0;
 		loopIterInfo[loopId]["stdDevIterations"] = 0;
 	}
 
@@ -740,7 +755,13 @@ function addResults(benchmarkResults, measures, executors, version, loopGroup, p
 	
 }
 
-function getSubFolders(sourceFolder, benchmarkFolders, allFolders, excludedFiles, excludedFolders) {
+function getSubFolders(params) {
+	var sourceFolder = params["sourceFolder"];
+	var benchmarkFolders = params["benchmarkFolders"];
+	var allFolders = params["allFolders"];
+	var excludedFiles = params["excludedFiles"];
+	var excludedFolders = params["excludedFolders"];
+
 	if (benchmarkFolders.length == 1 && benchmarkFolders[0] == "all")
 		benchmarkFolders = allFolders;
 
@@ -832,12 +853,12 @@ function rebuildCodeAst(benchmark, xtraFiles, xtraIncludeFolders, flags) {
 	Clava.rebuild();
 }
 
-function addTimerSeq(parallelLoopIds, parLoops) {
+function addTimerSeq(mainLoopIds, parLoops) {
 
 	var measures = [];
 
 	for(var result of Query.search('function').search('loop').chain()) {
-		if(!parallelLoopIds.includes(result["loop"].id)) {
+		if(!mainLoopIds.includes(result["loop"].id)) {
 			continue;
 		}
 
@@ -1017,18 +1038,18 @@ function createParLoopObj() {
 	parLoopObj["index"] = -1;
 
 	//iteration info
-	parLoopObj["maxIterations"] = -1;
-	parLoopObj["minIterations"] = -1;
-	parLoopObj["avgIterations"] = -1;
-	parLoopObj["stdDevIterations"] = -1;
-	parLoopObj["timesLoopIsCalled"] = -1;
+	parLoopObj["maxIterations"] = 0;
+	parLoopObj["minIterations"] = 0;
+	parLoopObj["avgIterations"] = 0;
+	parLoopObj["stdDevIterations"] = 0;
+	parLoopObj["timesLoopIsCalled"] = 0;
 	parLoopObj["hasIterationVariation"] = false;
 
 	//parent iteration info
-	parLoopObj["maxParentIterations"] = -1;
-	parLoopObj["minParentIterations"] = -1;
-	parLoopObj["avgParentIterations"] = -1;
-	parLoopObj["stdDevParentIterations"] = -1;
+	parLoopObj["maxParentIterations"] = 0;
+	parLoopObj["minParentIterations"] = 0;
+	parLoopObj["avgParentIterations"] = 0;
+	parLoopObj["stdDevParentIterations"] = 0;
 	parLoopObj["hasParentIterationVariation"] = false;
 	
 	//instruction info
@@ -1312,15 +1333,15 @@ function getOmpPragmas() {
 	return ompPragmas;
 }
 
-function getObjFromCache(benchmark,  benchmarkGroup, problemSizeFlag, loopGroupSizeLimit, objectName) {
-	var path = benchmark.cacheFolder + problemSizeFlag + "/" + objectName + "-" + loopGroupSizeLimit + ".json";
+function getObjFromCache(params, objectName) {
+	var path = params["benchmark"].cacheFolder + params["problemSizeFlag"] + "/" + objectName + "-" + params["loopGroupSizeLimit"] + ".json";
 	var obj = Io.readJson(path);
 
 	return obj;
 }
 
-function writeObjToCache(benchmark, benchmarkGroup, problemSizeFlag, loopGroupSizeLimit, objectName, obj) {
-	var path = benchmark.cacheFolder + problemSizeFlag + "/" + objectName + "-" + loopGroupSizeLimit + ".json";
+function writeObjToCache(params, objectName, obj) {
+	var path = params["benchmark"].cacheFolder + params["problemSizeFlag"] + "/" + objectName + "-" + params["loopGroupSizeLimit"] + ".json";
 	Io.writeJson(path, obj);
 }
 
@@ -1335,4 +1356,47 @@ function getLowestNestedLevel(loopGroup) {
 	}
 
 	return lowestNestedId;
+}
+
+function testPragmas(benchmark, parLoops, problemSizeFlag, loopGroupSizeLimit) {
+	var removedPragmas = {};
+	loopIds = Object.keys(parLoops);
+	$loops = getLoopsFromIds(loopIds);
+
+	println("Testing pragmas for problems");
+	println("parLoops size before tests = " + loopIds.length);
+
+	for(loopId of loopIds) {
+		Clava.pushAst();
+
+		//$loops[loopId].insertAfter("exit(0);");
+		addPragmas([loopId], parLoops);
+
+		var executorPar = buildAndRun(benchmark, "testPragmas", loopGroupSizeLimit, 1, true, problemSizeFlag)[0];
+		var returnValue = executorPar.getReturnValue();
+
+		if(returnValue != 0) {
+			removedPragmas[loopId] = parLoops[loopId];
+			delete parLoops[loopId];
+			println(loopId + " pragma failed. Removing it from parLoops.");
+		}
+		else
+			println(loopId + " pragma passed sucessfully.");
+
+		Clava.popAst();
+	}
+
+	println("parLoops size after tests = " + Object.keys(parLoops).length);
+
+	return removedPragmas;
+}
+
+function createCacheParamsObj(benchmark, problemSizeFlag, loopGroupSizeLimit) {
+	var params = {};
+
+	params["benchmark"] = benchmark;
+	params["problemSizeFlag"] = problemSizeFlag;
+	params["loopGroupSizeLimit"] = loopGroupSizeLimit;
+
+	return params;
 }

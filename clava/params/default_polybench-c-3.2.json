@@ -1,0 +1,44 @@
+{
+	"benchGroupName": "polybench-c-3.2",
+	"sourceFolder": "./sources/polybench-c-3.2/",
+	"benchmarkFolders": [
+		"all"
+	],
+	"nRuns": 3,
+	"loopGroupSizeLimit": 1,
+	"functionFilters": [
+		"kernel_"
+	],
+	"problemSizeFlags": [
+		"-DMINI_DATASET",
+		"-DSMALL_DATASET",
+		"-DSTANDARD_DATASET",
+		"-DLARGE_DATASET",
+		"-DEXTRALARGE_DATASET"
+	],
+	"defaultFlag": "-DSTANDARD_DATASET",
+	"allFolders": [
+		"datamining",
+		"linear-algebra",
+		"medley",
+		"stencils"
+	],
+	"foldersToGetExpectedC": [],
+	"excludedFiles": [],
+	"excludedFolders": [
+		"fdtd-2d"
+	],
+	"xtraFiles": [
+		"./sources/polybench-c-3.2/utilities/polybench.c",
+		"./sources/polybench-c-3.2/utilities/polybench.h"
+	],
+	"xtraIncludeFolders": [
+		"./sources/polybench-c-3.2/utilities"
+	],
+	"flags": {
+		"readCache": false,
+		"readFromExpectedOutput": false,
+		"testPragmas": true,
+		"onlyCalculateCaches": false
+	}
+}
