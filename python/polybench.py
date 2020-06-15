@@ -1,6 +1,9 @@
 import json
 import numpy as np
 import re
+import os
+
+from sklearn.model_selection import train_test_split
 
 from sklearn.tree import DecisionTreeRegressor
 from sklearn import linear_model
@@ -26,7 +29,6 @@ loop_targets = []
 def main():
     global loop_features, loop_targets
     loop_features, loop_targets = load_data()
-
 
 
     main_algorithms()
@@ -56,7 +58,7 @@ def main_algorithms():
 
 def svr():
     train_ratio = 0.8
-    x_train, x_test, y_train, y_test = split_train_test_data(train_ratio)
+    x_train, x_test, y_train, y_test = train_test_split(loop_features, loop_targets, test_size=1-train_ratio)
 
     reg = SVR(kernel="linear")
     reg.fit(x_train, y_train)
@@ -98,7 +100,7 @@ def linear_models():
 # 1.1.1
 def ordinary_least_squares():
     train_ratio = 0.8
-    x_train, x_test, y_train, y_test = split_train_test_data(train_ratio)
+    x_train, x_test, y_train, y_test = train_test_split(loop_features, loop_targets, test_size=1-train_ratio)
 
     reg = linear_model.LinearRegression()
     reg.fit(x_train, y_train)
@@ -112,7 +114,7 @@ def ordinary_least_squares():
 # 1.1.2
 def ridge_regression():
     train_ratio = 0.8
-    x_train, x_test, y_train, y_test = split_train_test_data(train_ratio)
+    x_train, x_test, y_train, y_test = train_test_split(loop_features, loop_targets, test_size=1-train_ratio)
 
     reg = linear_model.Ridge(alpha=0.5)
     reg.fit(x_train, y_train)
@@ -132,7 +134,7 @@ def ridge_regression():
 # 1.1.3
 def lasso():
     train_ratio = 0.8
-    x_train, x_test, y_train, y_test = split_train_test_data(train_ratio)
+    x_train, x_test, y_train, y_test = train_test_split(loop_features, loop_targets, test_size=1-train_ratio)
 
     reg = linear_model.Lasso(alpha=0.5)
     reg.fit(x_train, y_train)
@@ -154,7 +156,7 @@ def lasso():
 # 1.1.5
 def elastic_net():
     train_ratio = 0.8
-    x_train, x_test, y_train, y_test = split_train_test_data(train_ratio)
+    x_train, x_test, y_train, y_test = train_test_split(loop_features, loop_targets, test_size=1-train_ratio)
 
     reg = linear_model.ElasticNet(alpha=1.0, l1_ratio=0.5)
     reg.fit(x_train, y_train)
@@ -176,7 +178,7 @@ def elastic_net():
 # 1.1.7
 def lars():
     train_ratio = 0.8
-    x_train, x_test, y_train, y_test = split_train_test_data(train_ratio)
+    x_train, x_test, y_train, y_test = train_test_split(loop_features, loop_targets, test_size=1-train_ratio)
 
     reg = linear_model.Lars()
     reg.fit(x_train, y_train)
@@ -198,7 +200,7 @@ def lars():
 # 1.10.2
 def decision_tree_regressor():
     train_ratio = 0.8
-    x_train, x_test, y_train, y_test = split_train_test_data(train_ratio)
+    x_train, x_test, y_train, y_test = train_test_split(loop_features, loop_targets, test_size=1-train_ratio)
 
     reg_1 = DecisionTreeRegressor(max_depth=2)
     reg_2 = DecisionTreeRegressor(max_depth=5)
@@ -217,7 +219,7 @@ def decision_tree_regressor():
 # 1.15
 def isotonic_regression():
     train_ratio = 0.8
-    x_train, x_test, y_train, y_test = split_train_test_data(train_ratio)
+    x_train, x_test, y_train, y_test = train_test_split(loop_features, loop_targets, test_size=1-train_ratio)
 
     reg = IsotonicRegression()
     # reg.fit(x_train, y_train)
@@ -235,28 +237,38 @@ def unsupervised_learning():
 
 
 def load_data():
-    with open('/home/josecunha/Desktop/Clava/results/polybench_2020-04-13T15:47:30.735Z.json') as f:
-        data = json.load(f)
+    found_jsons = []
+
+    base_path = './results/'
+    for entry in os.listdir(base_path):
+        entry_path = os.path.join(base_path, entry)
+        if os.path.isfile(entry_path) and entry.endswith(".json"):
+            found_jsons.append(entry_path)
+
+    # for any wanted stats
+    stats = {}
 
     local_loop_features = []
     local_loop_targets = []
 
-    runs_per_version = int(data["runsPerVersion"])
+    for result in found_jsons:
+        with open(result) as f:
+            data = json.load(f)
 
-    for i in range(data["totalBenchmarks"]):
-        new_loop_features, new_loop_targets = parse_benchmark_simple(data["benchmarks"][i], runs_per_version)
-        local_loop_features.extend(new_loop_features)
-        local_loop_targets.extend(new_loop_targets)
+        runs_per_version = int(data["runsPerVersion"])
+
+        for i in range(data["totalBenchmarkVersions"]):
+            new_loop_features, new_loop_targets = parse_benchmark_simple(data["benchmarks"][i], runs_per_version)
+            local_loop_features.extend(new_loop_features)
+            local_loop_targets.extend(new_loop_targets)
 
     return local_loop_features, local_loop_targets
 
 
 def parse_benchmark_simple(benchmark, runs_per_version):
-    n_loops = benchmark["nLoops"]
-    if n_loops == 0:
-        return [], []
+    n_versions = benchmark["par"]["nVersions"]
 
-    if benchmark["benchmark"] == "/home/josecunha/Desktop/Clava/sources/polybench-c-3.2/stencils/fdtd-2d":
+    if n_versions == 0:
         return [], []
 
     loops_info_orig = benchmark["loops"]
@@ -269,39 +281,56 @@ def parse_benchmark_simple(benchmark, runs_per_version):
     for version in benchmark["par"]["versions"]:
         par_loops = version["parLoops"]
         loops_family_info = get_loops_family_info(par_loops, loops_info_orig)
-        main_loop = version["mainLoop"]
+        main_loop_index = version["mainLoop"]
 
-        for measure in version["measures"]:
-            loop_index = measure["loopIndex"]
-            if loop_index not in par_loops:
-                continue
+        measure = version["measures"][0]
+        loop_index = measure["loopIndex"]
 
-            avg_time = 0
-            for run in measure["runs"]:
-                avg_time += run["value"]
+        if loop_index != main_loop_index:
+            continue
 
-            avg_time /= runs_per_version
+        avg_time = 0
+        for run in measure["runs"]:
+            avg_time += run["value"]
 
-            speedup = avg_seq_times[loop_index] / avg_time
+        avg_time /= runs_per_version
 
-            loop_info_copy = loops_info[loop_index].copy()
+        speedup = avg_seq_times[loop_index] / avg_time
 
-            loop_index_str = str(loop_index)
-            n_ancestors = loops_family_info[loop_index_str]["ancestors"]
-            n_descendants = loops_family_info[loop_index_str]["descendants"]
-            loop_info_copy[N_ANCESTORS_INDEX] = n_ancestors
-            loop_info_copy[N_DESCENDANTS_INDEX] = n_descendants
+        loop_info_copy = loops_info[loop_index].copy()
 
-            bench_loop_features.append(loop_info_copy)
-            bench_loop_targets.append(speedup)
+        loop_index_str = str(loop_index)
+
+        #old
+        # n_ancestors = loops_family_info[loop_index_str]["ancestors"]
+        # n_descendants = loops_family_info[loop_index_str]["descendants"]
+        # loop_info_copy[N_ANCESTORS_INDEX] = n_ancestors
+        # loop_info_copy[N_DESCENDANTS_INDEX] = n_descendants
+
+        #new-old
+        # print(loop_info_copy)
+        # print(loop_index_str)
+        # print(loops_family_info)
+        # print(loops_family_info[loop_index_str]["ancestors"])
+        #
+        # loop_info_copy = np.append(loop_info_copy, loops_family_info[loop_index_str]["ancestors"])
+        # loop_info_copy = np.append(loop_info_copy, loops_family_info[loop_index_str]["descendants"])
+
+        loop_info_copy = np.append(loop_info_copy, len(par_loops))
+
+        print(loop_info_copy)
+        print(speedup)
+
+        bench_loop_features.append(loop_info_copy)
+        bench_loop_targets.append(speedup)
 
     return bench_loop_features, bench_loop_targets
 
 
-def get_loops_family_info(loops, loop_info_orig):
+def get_loops_family_info(par_loops, loop_info_orig):
     loops_family_info = {}
     for loop_key in loop_info_orig:
-        if int(loop_key) not in loops:
+        if int(loop_key) not in par_loops:
             continue
 
         loop = loop_info_orig[loop_key]
@@ -314,6 +343,12 @@ def get_loops_family_info(loops, loop_info_orig):
         curr_loop_id = loop["id"]
 
         for loop_2_key in loop_info_orig:
+
+            #TODO é suposto existir? nao estava ca, mas penso ser necesario para garantir que so contamos
+            # ancestors/descendants que estao a ser paralelizado em simultaneo com o loop que estamos a analisar
+            if int(loop_2_key) not in par_loops:
+                continue
+
             loop_2 = loop_info_orig[loop_2_key]
             if loop_2["id"] == curr_loop_id:
                 continue
@@ -365,78 +400,79 @@ def check_rank_descendant(loop_rank_0, loop_rank_1):
 def get_loops_info(loops):
     loops_info = []
 
+    IGNORED_FEATURES = ["id", "parentLoopId", "origLine", "rank", "index"]
+
     for loop_key in loops:
-        new_loop = np.zeros(N_FEATURES, np.int)
-        new_loop[NESTED_LEVEL_INDEX] = loops[loop_key]["nestedLevel"]
-        new_loop[IS_MAIN_LOOP_INDEX] = int(loops[loop_key]["isMainLoop"])
-        new_loop[IS_INNERMOST_INDEX] = int(loops[loop_key]["isInnermost"])
-        new_loop[IS_OUTERMOST_INDEX] = int(loops[loop_key]["isOutermost"])
+        current_loop = loops[loop_key]
+        new_loop = np.zeros(0, np.int)
 
-        pragma_info = get_pragma_info(loops[loop_key]["pragmas"])
+        for loop_feature in current_loop:
+            if loop_feature in IGNORED_FEATURES:
+                continue
 
-        new_loop[N_PRIVATES_INDEX] = pragma_info["n_privates"]
-        new_loop[N_FIRST_PRIVATES_INDEX] = pragma_info["n_first_privates"]
-        new_loop[N_REDUCTIONS_INDEX] = pragma_info["n_reductions"]
+            if loop_feature == "ompPragma":
+                pragma_info = get_pragma_info(loops[loop_key]["ompPragma"])
+                new_loop = np.append(new_loop, list(pragma_info.values()))
+            elif loop_feature == "instructionInfo":
+                for instruction_feature in current_loop[loop_feature]:
+                    if instruction_feature == "joinpoints" or instruction_feature == "recursiveJoinpoints":
+                        new_loop = np.append(new_loop, list(current_loop[loop_feature][instruction_feature].values()))
+                    else:
+                        new_loop = np.append(new_loop, current_loop[loop_feature][instruction_feature])
+            else:
+                new_loop = np.append(new_loop, current_loop[loop_feature])
 
         loops_info.append(new_loop)
 
     return loops_info
 
-
-def get_pragma_info(pragmas):
+#TODO need to test reductions
+def get_pragma_info(pragma):
     pragma_info = {
         "n_privates": 0,
         "n_first_privates": 0,
-        "n_reductions": 0
+        "n_reductions": 0,
+        "n_scalar_reductions": 0,
+        "n_array_reductions": 0
     }
 
-    for pragma in pragmas:
-        if pragma.startswith("#pragma scop"):
-            continue
+    private_result = re.search(" private\([^)]+\)", pragma)
+    if private_result:
+        private = private_result.group()[1:]
+        n_privates = private.split(",")
+        pragma_info["n_privates"] = len(n_privates)
 
-        private_result = re.search(" private\([^)]+\)", pragma)
-        if private_result:
-            private = private_result.group()[1:]
-            n_privates = private.split(",")
-            pragma_info["n_privates"] = len(n_privates)
+    first_private_result = re.search("firstprivate\([^)]+\)", pragma)
+    if first_private_result:
+        n_first_privates = first_private_result.group().split(",")
+        pragma_info["n_first_privates"] = len(n_first_privates)
 
-        first_private_result = re.search("firstprivate\([^)]+\)", pragma)
-        if first_private_result:
-            n_first_privates = first_private_result.group().split(",")
-            pragma_info["n_first_privates"] = len(n_first_privates)
-
-        reduction_result = re.search("reduction\([^)]+\)", pragma)
-        if reduction_result:
-            pragma_info["n_reductions"] = 1
+    reduction_results = re.findall("reduction \([^)]+\)", pragma)
+    if len(reduction_results) > 0:
+        pragma_info["n_reductions"] = len(reduction_results)
+        for reduction in reduction_results:
+            if "[" in reduction:
+                pragma_info["n_array_reductions"] += 1
+            else:
+                pragma_info["n_scalar_reductions"] += 1
 
     return pragma_info
 
 
 def get_seq_avg_times(seq, runs_per_version):
-    avg_times = []
+    avg_times = {}
 
     for loop_data in seq:
         avg_time = 0
+        loop_index = loop_data["loopIndex"]
 
         for run in loop_data["runs"]:
             avg_time += run["value"]
 
         avg_time /= runs_per_version
-        avg_times.append(avg_time)
+        avg_times[loop_index] = avg_time
 
     return avg_times
-
-
-def split_train_test_data(train_ratio):
-    x = np.asarray(loop_features)
-    y = np.asarray(loop_targets)
-
-    split_point = int(len(loop_features) * train_ratio)
-
-    x_train, x_test = np.split(x, [split_point])
-    y_train, y_test = np.split(y, [split_point])
-
-    return x_train, x_test, y_train, y_test
 
 
 main()
