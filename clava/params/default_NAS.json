@@ -46,10 +46,18 @@
 	],
 	"xtraFiles": [],
 	"xtraIncludeFolders": [],
-	"flags": {
+	"compilationFlags": [
+		"-03",
+		"-mcmodel=medium"
+	],
+	"compilationLibs": [
+		"m"
+	],
+	"preprocessorFlags": [],
+	"clavaFlags": {
 		"readCache": false,
 		"readFromExpectedOutput": true,
-		"testPragmas": true,
+		"testPragmas": 2,
 		"onlyCalculateCaches": false
 	}
 }

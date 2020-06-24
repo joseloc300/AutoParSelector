@@ -2,7 +2,7 @@
 	"benchGroupName": "polybench-c-3.2",
 	"sourceFolder": "./sources/polybench-c-3.2/",
 	"benchmarkFolders": [
-		"datamining/covariance/"
+		"stencils/seidel-2d/"
 	],
 	"nRuns": 3,
 	"loopGroupSizeLimit": 1,
@@ -35,10 +35,18 @@
 	"xtraIncludeFolders": [
 		"./sources/polybench-c-3.2/utilities"
 	],
-	"flags": {
+	"compilationFlags": [
+		"-03",
+		"-mcmodel=medium"
+	],
+	"compilationLibs": [
+		"m"
+	],
+	"preprocessorFlags": [],
+	"clavaFlags": {
 		"readCache": false,
 		"readFromExpectedOutput": false,
-		"testPragmas": true,
+		"testPragmas": 2,
 		"onlyCalculateCaches": false
 	}
 }

@@ -16,21 +16,25 @@ import Utils;
 
 aspectdef ProgramAnalyzer
 	input
-		params,
+		originalParams,
 		now
 	end
 
+	var params = Object.assign({}, originalParams);
+
 	var start_time = performance.now();
-	var AnalyzerResults = createBenchGroupResultsObj(params["nRuns"], params["loopGroupSizeLimit"]);
+	var AnalyzerResults = createBenchGroupResultsObj(params["loopGroupSizeLimit"]);
 
 	var benchmarks = getSubFolders(params);
-
-	//AnalyzerResults["totalBenchmarks"] = benchmarks.length;
-	//AnalyzerResults["totalBenchmarkVersions"] = benchmarks.length * params["problemSizeFlags"].length;
 
 	var autoParLoopItersFolder = Io.getAbsolutePath("extraIncludes/");
 	var autoParLoopItersHPath = Io.getPath(autoParLoopItersFolder, "autopar_loop_iters.h");
 	var autoParLoopItersCPath = Io.getPath(autoParLoopItersFolder, "autopar_loop_iters.c");
+
+	var loopItersFiles = {};
+	loopItersFiles["autoParLoopItersFolder"] = autoParLoopItersFolder;
+	loopItersFiles["autoParLoopItersHPath"] = autoParLoopItersHPath;
+	loopItersFiles["autoParLoopItersCPath"] = autoParLoopItersCPath;
 
 	println("Number of benchmarks found: " + benchmarks.length);
 	println("Processing benchmarks");
@@ -39,72 +43,49 @@ aspectdef ProgramAnalyzer
 
 		for(var problemSizeFlag of params["problemSizeFlags"]) {
 			println("Current problem size flag = " + problemSizeFlag);
-		
 			Clava.pushAst();
-			var flags = [problemSizeFlag];
-			if(problemSizeFlag == params["defaultFlag"]) {
-				flags = [];
-			}
+
+			updateDynamicParams(params, benchmark, problemSizeFlag);
+			rebuildCodeAst(params, params["xtraFiles"], params["xtraIncludeFolders"], false);
 
 			var parLoops;
 			var parLoopGroups;
 			var benchmarkResults;
 			var loopIterInfo;
 			var removedPragmas;
-
-			rebuildCodeAst(benchmark, params["xtraFiles"], params["xtraIncludeFolders"], flags);
 			
-			if(params["flags"]["readCache"]) {
-				var cacheParamsObj = createCacheParamsObj(benchmark, problemSizeFlag, params["loopGroupSizeLimit"]);
-				parLoops = getObjFromCache(cacheParamsObj, "parLoops");
-				if(Object.keys(parLoops).length == 0) {
+			if(params["clavaFlags"]["readCache"]) {
+				parLoops = getObjFromCache(params, "parLoops");
+				
+				if(checkEmptyParLoops(parLoops, params)) {
 					Clava.popAst();
 					continue;
 				}
-				loopIterInfo = getObjFromCache(cacheParamsObj, "loopIterInfo");
-				parLoopGroups = getObjFromCache(cacheParamsObj, "parLoopGroups");
-				benchmarkResults = getObjFromCache(cacheParamsObj, "benchmarkResults");
-			}
-			else {
-				var cacheParamsObj = createCacheParamsObj(benchmark, problemSizeFlag, params["loopGroupSizeLimit"]);
-			
-				if(params["foldersToGetExpectedC"].includes(benchmark.name)) {
-					parLoops = getParLoopsFromPrevOutput(benchmark, params["xtraFiles"], params["xtraIncludeFolders"], flags);
-				}
-				else {
-					Clava.pushAst();
-					parLoops = getParLoops(params["functionFilters"]);
-					Clava.popAst();
-				}
 
-				if(Object.keys(parLoops).length == 0) {
+				loopIterInfo = getObjFromCache(params, "loopIterInfo");
+				parLoopGroups = getObjFromCache(params, "parLoopGroups");
+				benchmarkResults = getObjFromCache(params, "benchmarkResults");
+			}
+			else {			
+				if(params["foldersToGetExpectedC"].includes(benchmark.name))
+					parLoops = getParLoopsFromExpectedOutput(params);
+				else
+					parLoops = getParLoops(params["functionFilters"]);
+
+				if(checkEmptyParLoops(parLoops, params)) {
 					Clava.popAst();
-					writeObjToCache(cacheParamsObj, "parLoops", parLoops);
 					continue;
 				}
 				
-				//test if all pragmas are functioning
-				if(params["flags"]["testPragmas"])
-					removedPragmas = testPragmas(benchmark, parLoops, problemSizeFlag, params["loopGroupSizeLimit"]);
-				else
-					removedPragmas = {};
+				removedPragmas = testPragmas(parLoops, params);
 
 				//skip if all pragmas are removed
-				if(Object.keys(parLoops).length == 0) {
+				if(checkEmptyParLoops(parLoops, params)) {
 					Clava.popAst();
-					writeObjToCache(cacheParamsObj, "parLoops", parLoops);
 					continue;
 				}
 				
-				Clava.pushAst();
-				var newExtraIncludeFolders = Array.from(params["xtraIncludeFolders"]);
-				newExtraIncludeFolders.push(autoParLoopItersFolder);
-				var newExtraFiles = Array.from(params["xtraFiles"]);
-				newExtraFiles.push(autoParLoopItersHPath, autoParLoopItersCPath);
-
-				rebuildCodeAst(benchmark, newExtraFiles, newExtraIncludeFolders, flags);
-				loopIterInfo = countLoopIterations(benchmark, parLoops, problemSizeFlag, params["loopGroupSizeLimit"]);
-				Clava.popAst();
+				loopIterInfo = countLoopIterations(parLoops, params, loopItersFiles);
 
 				parLoopGroups = getParLoopGroups(parLoops, params["loopGroupSizeLimit"]);
 				getLoopInfo(parLoops, loopIterInfo);
@@ -113,15 +94,15 @@ aspectdef ProgramAnalyzer
 				addLoopInfo(parLoops, benchmarkResults);
 
 				
-				writeObjToCache(cacheParamsObj, "parLoops", parLoops);
-				writeObjToCache(cacheParamsObj, "removedPragmas", removedPragmas);
-				writeObjToCache(cacheParamsObj, "loopIterInfo", loopIterInfo);
-				writeObjToCache(cacheParamsObj, "parLoopGroups", parLoopGroups);
-				writeObjToCache(cacheParamsObj, "benchmarkResults", benchmarkResults);
+				writeObjToCache(params, "parLoops", parLoops);
+				writeObjToCache(params, "removedPragmas", removedPragmas);
+				writeObjToCache(params, "loopIterInfo", loopIterInfo);
+				writeObjToCache(params, "parLoopGroups", parLoopGroups);
+				writeObjToCache(params, "benchmarkResults", benchmarkResults);
 			}
 
 			//if only calculating caches skip timing the benchmarks
-			if(params["flags"]["onlyCalculateCaches"]) {
+			if(params["clavaFlags"]["onlyCalculateCaches"]) {
 				Clava.popAst();
 				continue;
 			}
@@ -137,7 +118,7 @@ aspectdef ProgramAnalyzer
 				addPragmas(loopGroup, parLoops);
 	
 				var measuresPar = addTimerPar(loopGroup, parLoops);
-				var executorsPar = buildAndRun(benchmark, version, params["loopGroupSizeLimit"], params["nRuns"], true, problemSizeFlag);	
+				var executorsPar = buildAndRun(params, version, params["nRuns"], true);	
 				addResults(benchmarkResults, measuresPar, executorsPar, version, loopGroup, parLoops);
 				version++;
 				Clava.popAst();
@@ -146,7 +127,7 @@ aspectdef ProgramAnalyzer
 			var mainLoopIds = getMainLoopIds(parLoops);
 	
 			var measuresSeq = addTimerSeq(mainLoopIds, parLoops);
-			var executorsSeq = buildAndRun(benchmark, version, params["loopGroupSizeLimit"], params["nRuns"], false, problemSizeFlag);
+			var executorsSeq = buildAndRun(params, version, params["nRuns"], false);
 			
 			version = -1;
 			addResults(benchmarkResults, measuresSeq, executorsSeq, version, loopGroup, parLoops);

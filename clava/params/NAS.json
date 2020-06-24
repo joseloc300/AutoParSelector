@@ -2,9 +2,9 @@
 	"benchGroupName": "NAS",
 	"sourceFolder": "./sources/NAS/",
 	"benchmarkFolders": [
-		"SP"
+		"LU"
 	],
-	"nRuns": 3,
+	"nRuns": 1,
 	"loopGroupSizeLimit": 1,
 	"functionFilters": [
 		""
@@ -40,10 +40,18 @@
 	],
 	"xtraFiles": [],
 	"xtraIncludeFolders": [],
-	"flags": {
+	"compilationFlags": [
+		"-03",
+		"-mcmodel=medium"
+	],
+	"compilationLibs": [
+		"m"
+	],
+	"preprocessorFlags": [],
+	"clavaFlags": {
 		"readCache": false,
 		"readFromExpectedOutput": true,
-		"testPragmas": true,
+		"testPragmas": 0,
 		"onlyCalculateCaches": false
 	}
 }

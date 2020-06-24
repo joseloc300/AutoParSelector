@@ -18,13 +18,19 @@ function getLoopIndexes(loopGroup, parLoops) {
 	return indexes;
 }
 
-function countLoopIterations(benchmark, parLoops, problemSizeFlag, loopGroupSizeLimit) {
+function countLoopIterations(parLoops, params, loopItersFiles) {
+	Clava.pushAst();
+
+	var newExtraIncludeFolders = Array.from(params["xtraIncludeFolders"]);
+	newExtraIncludeFolders.push(loopItersFiles["autoParLoopItersFolder"]);
+	var newExtraFiles = Array.from(params["xtraFiles"]);
+	newExtraFiles.push(loopItersFiles["autoParLoopItersHPath"], loopItersFiles["autoParLoopItersCPath"]);
+
+	rebuildCodeAst(params, newExtraFiles, newExtraIncludeFolders, false);
 
 	var loopIterInfo = {};
-
 	var functionFilters = ["autopar_init_array", "autopar_array_exit_function"];
 	var $allLoops = getLoopsFiltered(functionFilters, false);
-	
 	
 	//filter non-"for" loops
 	for(var i = 0; i < $allLoops.length; i++) {
@@ -34,7 +40,6 @@ function countLoopIterations(benchmark, parLoops, problemSizeFlag, loopGroupSize
 			println("removed elem");
 		}
 	}
-
 
 	var allLoopIds = Object.keys($allLoops);
 	var nLoops = allLoopIds.length;
@@ -55,10 +60,13 @@ function countLoopIterations(benchmark, parLoops, problemSizeFlag, loopGroupSize
 	var $exitFunction;
 	for(var $function of Query.search('function')) {
 		if($function.name == "autopar_array_exit_function") {
-			$exitFunction = $function;	
+			$exitFunction = $function;
+			println("found it");
 			break;
 		}
+		println("iter");
 	}
+	
 	$program.atexit($exitFunction);
 
 	var initArrayCallCode = "autopar_init_array(" + nLoops + ");";
@@ -101,13 +109,16 @@ function countLoopIterations(benchmark, parLoops, problemSizeFlag, loopGroupSize
 		index++;
 	}
 	
-	var executorPar = buildAndRun(benchmark, "iterCounter", loopGroupSizeLimit, 1, true, problemSizeFlag)[0];
+	var executorPar = buildAndRun(params, "iterCounter", 1, true)[0];
 	var consoleOutput = executorPar.getConsoleOutput();
 
-	Io.writeFile("./logs/consoleOutput2.txt", consoleOutput);
+	println(consoleOutput);
+
+	exit(0);
 
 	getLoopIterationStats(loopIndexToId, consoleOutput, parLoops, loopIterInfo, nLoops);
 
+	Clava.popAst();
 	return loopIterInfo;	
 }
 
@@ -833,17 +844,24 @@ function createBenchmarkObj(fileString) {
 	return benchmark;
 }
 
-function rebuildCodeAst(benchmark, xtraFiles, xtraIncludeFolders, flags) {
+function rebuildCodeAst(params, xtraFiles, xtraIncludeFolders, readFromExpectedC) {
+	var benchmark = params["dynamic"]["benchmark"];
+	var preprocessorFlags = params["dynamic"]["preprocessorFlags"];
+
 	var includeFolders = Array.from(xtraIncludeFolders);
 	includeFolders.push(benchmark.folder);
 
 	var dataStore = Clava.getData();
 	dataStore.setUserIncludes(includeFolders);
-	var flagString = concatFlags(flags);
+	var flagString = concatFlags(preprocessorFlags);
 	dataStore.setFlags(flagString);
 
 	var files = Array.from(xtraFiles);
 	files.push(benchmark.c);
+	if(readFromExpectedC) {
+		var expectedCPath = benchmark.folder + "/expected_output.c";
+		files.push(expectedCPath);
+	}
 	
 	for(var file of files) {
 		var clavaJPFile = ClavaJoinPoints.file(file);
@@ -1062,8 +1080,8 @@ function createParLoopObj() {
 }
 
 function getParLoops(functionFilters) {
+	Clava.pushAst();
 	var loops = getLoopsFiltered(functionFilters, true);
-
 	var pragmas = Parallelize.getForLoopsPragmas(loops, false, true);
 	var loopIds = Object.keys(pragmas["parallelLoops"]);
 
@@ -1086,35 +1104,17 @@ function getParLoops(functionFilters) {
 		}
 	}
 	
+	Clava.popAst();
 	return parLoops;
 }
 
-function getParLoopsFromPrevOutput(benchmark, xtraCs, xtraIncludeFolders, flags) {
-	var parLoops = {};
+function getParLoopsFromExpectedOutput(params) {
 	Clava.pushAst();
-
-	//copied from rebuildCodeAst()
-	var includeFolders = Array.from(xtraIncludeFolders);
-	includeFolders.push(benchmark.folder);
-
-	var dataStore = Clava.getData();
-	dataStore.setUserIncludes(includeFolders);
-	var flagString = concatFlags(flags);
-	dataStore.setFlags(flagString);
-
-	var cs = Array.from(xtraCs);
-	var expectedCPath = benchmark.folder + "/expected_output.c";
-	cs.push(expectedCPath);
-	
-	for(var c of cs) {
-		var clavaJPFile = ClavaJoinPoints.file(c);
-		Clava.addFile(clavaJPFile);
-	}
-
-	Clava.rebuild();
-
+	rebuildCodeAst(params, params["xtraFiles"], params["xtraIncludeFolders"], true);
 	var ompPragmas = getOmpPragmas();
+	var benchmark = params["dynamic"]["benchmark"];
 
+	var parLoops = {};
 	for(var pragma of ompPragmas) {
 		var $loop = pragma.target;
 		var loopId = $loop.id;
@@ -1150,9 +1150,12 @@ function fixLoopId(loopId, benchmark) {
 	return newLoopId;
 }
 
-function buildAndRun(benchmark, version, loopGroupSizeLimit, nRuns, isPar, problemSizeFlag) {
+function buildAndRun(params, version, nRuns, isPar) {
+	var benchmark = params["dynamic"]["benchmark"];
+	var problemSizeFlag = params["dynamic"]["problemSizeFlag"];
+	var loopGroupSizeLimit = params["loopGroupSizeLimit"];
+
 	var subFolder = "";
-	
 	if(isPar) {
 		subFolder = "/par/" + loopGroupSizeLimit + "/" + version;
 	}
@@ -1166,9 +1169,17 @@ function buildAndRun(benchmark, version, loopGroupSizeLimit, nRuns, isPar, probl
 	var cmaker = new CMaker(benchmark.name);
 
 	cmaker.addCurrentAst();
+	for(lib of params["compilationLibs"])
+		cmaker.addLibs(lib);
+
+	for(flag of params["compilationFlags"])
+		cmaker.addFlags(flag);
+
+	/*
 	cmaker.addLibs("m");
 	cmaker.addFlags("-O3");
 	cmaker.addFlags("-mcmodel=medium");
+	*/
 	if(isPar)
 		cmaker.addFlags("-fopenmp");
 
@@ -1180,7 +1191,7 @@ function buildAndRun(benchmark, version, loopGroupSizeLimit, nRuns, isPar, probl
 	for(i = 0; i < nRuns; i++) {
 		var executor = new ProcessExecutor();	
 		executor.setPrintToConsole(false);
-		var exeOutput = executor.execute(exe.getAbsolutePath());
+		executor.execute(exe.getAbsolutePath());
 		executors.push(executor);
 	}
 
@@ -1215,10 +1226,9 @@ function getMainLoopIds(parLoops) {
 	return mainLoopsIds;
 }
 
-function createBenchGroupResultsObj(nRuns, loopGroupSizeLimit) {
+function createBenchGroupResultsObj(loopGroupSizeLimit) {
 	var benchGroupResultsObj = {};
 	benchGroupResultsObj["loopGroupSizeLimit"] = loopGroupSizeLimit;
-	benchGroupResultsObj["runsPerVersion"] = nRuns;
 	benchGroupResultsObj["totalRuns"] = 0;
 	benchGroupResultsObj["totalVersions"] = 0;
 	benchGroupResultsObj["totalParLoops"] = 0;
@@ -1334,14 +1344,22 @@ function getOmpPragmas() {
 }
 
 function getObjFromCache(params, objectName) {
-	var path = params["benchmark"].cacheFolder + params["problemSizeFlag"] + "/" + objectName + "-" + params["loopGroupSizeLimit"] + ".json";
+	var benchmarkCacheFolder = params["dynamic"]["benchmark"].cacheFolder;
+	var problemSizeFlag = params["dynamic"]["problemSizeFlag"];
+	var loopGroupSizeLimit = params["loopGroupSizeLimit"];
+
+	var path = benchmarkCacheFolder + problemSizeFlag + "/" + objectName + "-" + loopGroupSizeLimit + ".json";
 	var obj = Io.readJson(path);
 
 	return obj;
 }
 
 function writeObjToCache(params, objectName, obj) {
-	var path = params["benchmark"].cacheFolder + params["problemSizeFlag"] + "/" + objectName + "-" + params["loopGroupSizeLimit"] + ".json";
+	var benchmarkCacheFolder = params["dynamic"]["benchmark"].cacheFolder;
+	var problemSizeFlag = params["dynamic"]["problemSizeFlag"];
+	var loopGroupSizeLimit = params["loopGroupSizeLimit"];
+
+	var path = benchmarkCacheFolder + problemSizeFlag + "/" + objectName + "-" + loopGroupSizeLimit + ".json";
 	Io.writeJson(path, obj);
 }
 
@@ -1358,32 +1376,48 @@ function getLowestNestedLevel(loopGroup) {
 	return lowestNestedId;
 }
 
-function testPragmas(benchmark, parLoops, problemSizeFlag, loopGroupSizeLimit) {
+function testPragmas(parLoops, params) {
+	var NO_TESTING = 0;
+	var STRICTNESS_LOW = 1;
+	var STRICTNESS_HIGH = 2;
+
+	var test_strictness = params["clavaFlags"]["testPragmas"];
+
 	var removedPragmas = {};
+	if(test_strictness == NO_TESTING)
+		return removedPragmas;
+	
 	loopIds = Object.keys(parLoops);
 	$loops = getLoopsFromIds(loopIds);
 
+	var nLoops = loopIds.length;
 	println("Testing pragmas for problems");
-	println("parLoops size before tests = " + loopIds.length);
+	println("parLoops size before tests = " + nLoops);
 
+	var counter = 0;
 	for(loopId of loopIds) {
+		var msg_prefix = counter + "/" + nLoops + " " + loopId;
+	
 		Clava.pushAst();
 
-		//$loops[loopId].insertAfter("exit(0);");
+		if(test_strictness == STRICTNESS_LOW)
+			$loops[loopId].insertAfter("exit(0);");
 		addPragmas([loopId], parLoops);
 
-		var executorPar = buildAndRun(benchmark, "testPragmas", loopGroupSizeLimit, 1, true, problemSizeFlag)[0];
+		var executorPar = buildAndRun(params, "testPragmas", 1, true)[0];
 		var returnValue = executorPar.getReturnValue();
 
 		if(returnValue != 0) {
 			removedPragmas[loopId] = parLoops[loopId];
 			delete parLoops[loopId];
-			println(loopId + " pragma failed. Removing it from parLoops.");
+			println(msg_prefix + " pragma failed. Removing it from parLoops.");
 		}
 		else
-			println(loopId + " pragma passed sucessfully.");
+			println(msg_prefix + " pragma passed sucessfully.");
 
 		Clava.popAst();
+
+		counter++;
 	}
 
 	println("parLoops size after tests = " + Object.keys(parLoops).length);
@@ -1391,12 +1425,21 @@ function testPragmas(benchmark, parLoops, problemSizeFlag, loopGroupSizeLimit) {
 	return removedPragmas;
 }
 
-function createCacheParamsObj(benchmark, problemSizeFlag, loopGroupSizeLimit) {
-	var params = {};
+function updateDynamicParams(params, benchmark, problemSizeFlag, loopGroupSizeLimit) {
+	params["dynamic"] = {};
+	params["dynamic"]["benchmark"] = benchmark;
+	params["dynamic"]["problemSizeFlag"] = problemSizeFlag;
+	params["dynamic"]["preprocessorFlags"] = params["preprocessorFlags"];
+	if(params["dynamic"]["problemSizeFlag"] != params["defaultFlag"]) {
+		params["dynamic"]["preprocessorFlags"].push(problemSizeFlag);
+	}
+}
 
-	params["benchmark"] = benchmark;
-	params["problemSizeFlag"] = problemSizeFlag;
-	params["loopGroupSizeLimit"] = loopGroupSizeLimit;
+function checkEmptyParLoops(parLoops, params) {
+	if(Object.keys(parLoops).length == 0) {
+		writeObjToCache(params, "parLoops", parLoops);
+		return true;
+	}
 
-	return params;
+	return false;
 }
