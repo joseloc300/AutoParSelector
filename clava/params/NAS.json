@@ -41,7 +41,7 @@
 	"xtraFiles": [],
 	"xtraIncludeFolders": [],
 	"compilationFlags": [
-		"-03",
+		"-O3",
 		"-mcmodel=medium"
 	],
 	"compilationLibs": [

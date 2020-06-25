@@ -36,7 +36,7 @@
 		"./sources/polybench-c-3.2/utilities"
 	],
 	"compilationFlags": [
-		"-03",
+		"-O3",
 		"-mcmodel=medium"
 	],
 	"compilationLibs": [

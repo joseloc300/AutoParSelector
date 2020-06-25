@@ -2,6 +2,7 @@
 #define AUTOPAR_LOOP_ITERS_H
 
 struct autopar_loop_iters {
+	int iter_acum;
 	int max_iters;
 	int min_iters;
 	unsigned long long sum_iters;

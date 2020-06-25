@@ -35,10 +35,8 @@ function countLoopIterations(parLoops, params, loopItersFiles) {
 	//filter non-"for" loops
 	for(var i = 0; i < $allLoops.length; i++) {
 		var $loop = $allLoops[i];
-		if($loop.kind != "for") {
+		if($loop.kind != "for")
 			$allLoops.splice(i, 1);
-			println("removed elem");
-		}
 	}
 
 	var allLoopIds = Object.keys($allLoops);
@@ -80,28 +78,41 @@ function countLoopIterations(parLoops, params, loopItersFiles) {
 		loopIndexToId.push($loop.id);
 		loopIterInfo[$loop.id] = createLoopIterationObj();
 
+		var loopCodeBefore = "int autopar_loop" + index + "_thread_num = omp_get_thread_num();\n";
+
+		//update iter acumulator
+		var loopCodeBody = "autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].iter_acum += 1;\n";
+
 		//update total calls
-		var loopCode = "autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].total_calls += 1;\n";
+		var loopCodeAfter = "autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].total_calls += 1;\n";
 
 		//update sum iters
-		loopCode += "autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].sum_iters += " + $loop.iterationsExpr.code + ";\n";
+		loopCodeAfter += "autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].sum_iters += " + 
+		"autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].iter_acum;\n";
 		
 		//update sum iters squared
-		loopCode += "autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].sum_iters_squared += pow(" + 
-			$loop.iterationsExpr.code + ", 2.0);\n";
+		loopCodeAfter += "autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].sum_iters_squared += pow(" + 
+			"autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].iter_acum, 2.0);\n";
 	
 		//update max iters
-		loopCode += "if(autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].max_iters < " + 
-			$loop.iterationsExpr.code + ") " + "autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].max_iters = " + 
-			$loop.iterationsExpr.code + ";\n";
+		loopCodeAfter += "if(autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].max_iters < " + 
+			"autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].iter_acum) " + 
+			"autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].max_iters = " + 
+			"autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].iter_acum;\n";
 
 		//update min iters
-		loopCode += "if(autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].min_iters > " + 
-			$loop.iterationsExpr.code + ") " + "autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].min_iters = " + 
-			$loop.iterationsExpr.code + ";\n";
+		loopCodeAfter += "if(autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].min_iters > " + 
+			"autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].iter_acum) " + 
+			"autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].min_iters = " + 
+			"autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].iter_acum;\n";
 
-		
-		$loop.insertBefore(loopCode);
+		//reset iter acumulator
+		//loopCodeAfter += "printf(\"%d\\n\",autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].iter_acum);\n";
+		loopCodeAfter += "autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].iter_acum = 0;\n";
+
+		$loop.insertBefore(loopCodeBefore);
+		$loop.body.insertBegin(loopCodeBody);
+		$loop.insertAfter(loopCodeAfter);
 		if($loop.nestedLevel == 0 && Object.keys(parLoops).contains($loop.id)) {
 			$loop.insertBefore(parLoops[$loop.id]["ompPragma"]);
 		}
@@ -112,9 +123,9 @@ function countLoopIterations(parLoops, params, loopItersFiles) {
 	var executorPar = buildAndRun(params, "iterCounter", 1, true)[0];
 	var consoleOutput = executorPar.getConsoleOutput();
 
-	println(consoleOutput);
+	//println(consoleOutput);
 
-	exit(0);
+	//exit(0);
 
 	getLoopIterationStats(loopIndexToId, consoleOutput, parLoops, loopIterInfo, nLoops);
 
