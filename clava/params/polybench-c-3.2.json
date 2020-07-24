@@ -44,9 +44,10 @@
 	],
 	"preprocessorFlags": [],
 	"clavaFlags": {
+		"testPragmas": 2,
 		"readCache": false,
 		"readFromExpectedOutput": false,
-		"testPragmas": 2,
-		"onlyCalculateCaches": false
+		"onlyCalculateCaches": false,
+		"expressionBasedIterCounting": false
 	}
 }

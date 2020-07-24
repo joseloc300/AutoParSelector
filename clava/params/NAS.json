@@ -4,13 +4,15 @@
 	"benchmarkFolders": [
 		"LU"
 	],
-	"nRuns": 1,
+	"nRuns": 3,
 	"loopGroupSizeLimit": 1,
 	"functionFilters": [
 		""
 	],
 	"problemSizeFlags": [
-		"-DCLASS_S"
+		"-DCLASS_S",
+		"-DCLASS_W",
+		"-DCLASS_A"
 	],
 	"defaultFlag": "-DCLASS_W",
 	"allFolders": [
@@ -49,9 +51,10 @@
 	],
 	"preprocessorFlags": [],
 	"clavaFlags": {
+		"testPragmas": 2,
 		"readCache": false,
 		"readFromExpectedOutput": true,
-		"testPragmas": 0,
-		"onlyCalculateCaches": false
+		"onlyCalculateCaches": false,
+		"expressionBasedIterCounting": true
 	}
 }

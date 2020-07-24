@@ -1,0 +1,6 @@
+{
+    "paramsToCreate": [],
+    "paramsToLoad": [
+        "polybench-c-4.2"
+    ]
+}

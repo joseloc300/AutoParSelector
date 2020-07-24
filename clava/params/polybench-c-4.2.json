@@ -1,8 +1,8 @@
 {
-	"benchGroupName": "polybench-c-3.2",
-	"sourceFolder": "./sources/polybench-c-3.2/",
+	"benchGroupName": "polybench-c-4.2",
+	"sourceFolder": "./sources/polybench-c-4.2/",
 	"benchmarkFolders": [
-		"all"
+		"stencils"
 	],
 	"nRuns": 3,
 	"loopGroupSizeLimit": 1,
@@ -10,11 +10,7 @@
 		"kernel_"
 	],
 	"problemSizeFlags": [
-		"-DMINI_DATASET",
-		"-DSMALL_DATASET",
-		"-DSTANDARD_DATASET",
-		"-DLARGE_DATASET",
-		"-DEXTRALARGE_DATASET"
+		"-DMINI_DATASET"
 	],
 	"defaultFlag": "-DSTANDARD_DATASET",
 	"allFolders": [
@@ -24,16 +20,16 @@
 		"stencils"
 	],
 	"foldersToGetExpectedC": [],
-	"excludedFiles": [],
-	"excludedFolders": [
-		"fdtd-2d"
+	"excludedFiles": [
+		"Nussinov.orig.c"
 	],
+	"excludedFolders": [],
 	"xtraFiles": [
-		"./sources/polybench-c-3.2/utilities/polybench.c",
-		"./sources/polybench-c-3.2/utilities/polybench.h"
+		"./sources/polybench-c-4.2/utilities/polybench.c",
+		"./sources/polybench-c-4.2/utilities/polybench.h"
 	],
 	"xtraIncludeFolders": [
-		"./sources/polybench-c-3.2/utilities"
+		"./sources/polybench-c-4.2/utilities"
 	],
 	"compilationFlags": [
 		"-O3",
@@ -48,6 +44,6 @@
 		"readCache": false,
 		"readFromExpectedOutput": false,
 		"onlyCalculateCaches": false,
-		"expressionBasedIterCounting": false
+		"expressionBasedIterCounting": true
 	}
 }

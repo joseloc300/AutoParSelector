@@ -18,7 +18,7 @@ void autopar_init_array(int n_loops) {
 	   	exit(-1);
 	}
 	
-	struct autopar_loop_iters autopar_loop_iters_default = { 0, 0, INT_MAX, 0, 0, 0 };
+	struct autopar_loop_iters autopar_loop_iters_default = { 0, INT_MAX, 0, 0, 0 };
 	for(int i = 0; i < autopar_loop_iters_array_size; i++) {
 		autopar_loop_iters_array[i] = autopar_loop_iters_default;
 	}

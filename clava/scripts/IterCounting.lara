@@ -1,0 +1,316 @@
+import Utils;
+
+function countLoopIterations(parLoops, params, loopItersFiles) {
+	Clava.pushAst();
+
+	var newExtraIncludeFolders = Array.from(params["xtraIncludeFolders"]);
+	newExtraIncludeFolders.push(loopItersFiles["autoParLoopItersFolder"]);
+	var newExtraFiles = Array.from(params["xtraFiles"]);
+	newExtraFiles.push(loopItersFiles["autoParLoopItersHPath"], loopItersFiles["autoParLoopItersCPath"]);
+
+	rebuildCodeAst(params, newExtraFiles, newExtraIncludeFolders, false);
+
+	var functionFilters = ["autopar_init_array", "autopar_array_exit_function"];
+	var $allLoops = getLoopsFiltered(functionFilters, false);
+	
+	//filter non-"for" loops
+	for(var i = 0; i < $allLoops.length; i++) {
+		var $loop = $allLoops[i];
+		if($loop.kind != "for")
+			$allLoops.splice(i, 1);
+	}
+
+	var allLoopIds = Object.keys($allLoops);
+	var nLoops = allLoopIds.length;
+
+	var $program = Clava.getProgram();
+	var $files = $program.files;
+	var $chosenFile;
+	
+	for(var $file of $files) {
+		if($file.name.endsWith(".c")) {
+			$file.addInclude("autopar_loop_iters.h");
+		}
+		if($file.hasMain) {
+			$chosenFile = $file;
+		}
+	}
+
+	var $exitFunction;
+	for(var $function of Query.search('function')) {
+		if($function.name == "autopar_array_exit_function") {
+			$exitFunction = $function;
+			break;
+		}
+	}
+	
+	$program.atexit($exitFunction);
+
+	var initArrayCallCode = "autopar_init_array(" + nLoops + ");";
+	var $mainFunctionBody = $program.main.body;
+	$mainFunctionBody.insertBegin(initArrayCallCode);
+
+	var loopIndexToId = [];
+	var loopIterInfo = {};
+	if(params["clavaFlags"]["expressionBasedIterCounting"])
+		expressionBasedIterCounting(parLoops, loopIterInfo, loopIndexToId, $allLoops, nLoops);
+	else
+		realtimeIterCounting(parLoops, loopIterInfo, loopIndexToId, $allLoops, nLoops);
+	
+	
+	var executorPar = buildAndRun(params, "iterCounter", 1, true)[0];
+	var consoleOutput = executorPar.getConsoleOutput();
+
+	getLoopIterationStats(loopIndexToId, consoleOutput, parLoops, loopIterInfo, nLoops);
+
+	Clava.popAst();
+	return loopIterInfo;	
+}
+
+function expressionBasedIterCounting(parLoops, loopIterInfo, loopIndexToId, $allLoops, nLoops) {
+	var index = 0;
+	for(var $loop of $allLoops) {
+		
+		loopIndexToId.push($loop.id);
+		loopIterInfo[$loop.id] = createLoopIterationObj();
+		
+		var iterExprCode = $loop.iterationsExpr.code;
+
+		//update total calls
+		var loopCode = "autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].total_calls += 1;\n";
+
+		//update sum iters
+		loopCode += "autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].sum_iters += " + iterExprCode + ";\n";
+		
+		//update sum iters squared
+		loopCode += "autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].sum_iters_squared += pow(" + 
+			iterExprCode + ", 2.0);\n";
+	
+		//update max iters
+		loopCode += "if(autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].max_iters < " + 
+			iterExprCode + ") " + "autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].max_iters = " + 
+			iterExprCode + ";\n";
+
+		//update min iters
+		loopCode += "if(autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].min_iters > " + 
+			iterExprCode + ") " + "autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].min_iters = " + 
+			iterExprCode + ";\n";
+
+		
+		$loop.insertBefore(loopCode);
+		if($loop.nestedLevel == 0 && Object.keys(parLoops).contains($loop.id)) {
+			$loop.insertBefore(parLoops[$loop.id]["ompPragma"]);
+		}
+		
+		index++;
+	}
+}
+
+function realtimeIterCounting(parLoops, loopIterInfo, loopIndexToId, $allLoops, nLoops) {
+	var index = 0;
+	var pragmaPrivates = {};
+	var $pragmaLoops = [];
+	for(var $loop of $allLoops) {
+		
+		loopIndexToId.push($loop.id);
+		loopIterInfo[$loop.id] = createLoopIterationObj();
+
+		//var loopCodeBefore = "int autopar_loop" + index + "_acum;\n";
+		var sharedAcum = "autopar_loop" + index + "_acum";
+		var privateAcum = "autopar_loop" + index + "_acum_temp";
+		var varInits = "int " + sharedAcum + " = 0;\nint " + privateAcum + " = 0;\n";
+
+		//update private acumulator
+		var updatePrivateAcum = privateAcum + " += 1;\n";
+
+		
+		var criticalPragma = "#pragma omp critical\n";
+		var criticalCode = "{\n" + sharedAcum + " += " + privateAcum + ";\n}\n";
+		var barrierPragma = "#pragma omp barrier\n";
+		var singlePragma = "#pragma omp single\n";
+		var singleCode = "{\n";
+		
+		//update total calls
+		singleCode += "autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].total_calls += 1;\n";
+
+		//update sum iters
+		singleCode += "autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].sum_iters += " + 
+		sharedAcum + ";\n";
+		
+		//update sum iters squared
+		singleCode += "autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].sum_iters_squared += pow(" + 
+			sharedAcum + ", 2.0);\n";
+	
+		//update max iters
+		singleCode += "if(autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].max_iters < " + 
+			sharedAcum + ") " + 
+			"autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].max_iters = " + 
+			sharedAcum + ";\n";
+
+		//update min iters
+		singleCode += "if(autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].min_iters > " + 
+			sharedAcum + ") " + 
+			"autopar_loop_iters_array[omp_get_thread_num() * " + nLoops + " + " + index + "].min_iters = " + 
+			sharedAcum + ";\n";
+
+		singleCode += "}\n";
+
+		$loop.insertBefore(varInits);
+		$loop.body.insertBegin(updatePrivateAcum);
+		$loop.insertAfter(singleCode);
+		$loop.insertAfter(singlePragma);
+		$loop.insertAfter(barrierPragma);
+		$loop.insertAfter(criticalCode);
+		$loop.insertAfter(criticalPragma);
+		if($loop.nestedLevel == 0 && Object.keys(parLoops).contains($loop.id)) {
+			$loop.insertBefore(parLoops[$loop.id]["ompPragma"]);
+			$pragmaLoops.push($loop);
+		}
+
+		var mainLoopId = getMainLoopId($loop);
+		if(Object.keys(parLoops).contains(mainLoopId)) {
+			if(!(mainLoopId in pragmaPrivates))
+				pragmaPrivates[mainLoopId] = [];
+			pragmaPrivates[mainLoopId].push(privateAcum);
+		}
+		
+		
+		index++;
+	}
+
+	updateMainLoopPragmas($pragmaLoops, pragmaPrivates);
+}
+
+function getMainLoopId($loop) {
+	while($loop.nestedLevel != 0) {
+		$loop = $loop.ancestor("loop");
+	}
+	return $loop.id;
+}
+
+function updateMainLoopPragmas($pragmaLoops, pragmaPrivates) {
+	for($pragmaLoop of $pragmaLoops) {
+		var pragmas = $pragmaLoop.pragmas;
+		for(var i = 0; i < pragmas.length; i++) {
+			if(!pragmas[i].instanceOf("omp"))
+				continue;
+
+			var kindSplit = pragmas[i].kind.split(" ");
+			if(!kindSplit.contains("for"))
+				continue;
+
+			var privates = Array.from(pragmas[i].private);
+			for(var newPrivate of pragmaPrivates[$pragmaLoop.id]) {
+				privates.push(newPrivate);
+			}
+			pragmas[i].setPrivate(privates);
+			break;
+		}
+	}
+}
+
+function getLoopIterationStats(loopIndexToId, consoleOutput, parLoops, loopIterInfo, nLoops) {
+	//constants
+	var MAX_ITERS_INDEX = 0;
+	var MIN_ITERS_INDEX = 1;
+	var SUM_ITERS_INDEX = 2;
+	var SUM_ITERS_SQUARED_INDEX = 3;
+	var TOTAL_CALLS_INDEX = 4;
+
+
+	var lines = consoleOutput.split("\n");
+	for(var line of lines) {
+		if(!line.startsWith("autopar_loop_iters"))
+			continue;
+
+		//get array index
+		var openSquareBracketIndex = line.indexOf("["); 
+		var closeSquareBracketIndex = line.indexOf("]");
+		var arrayIndex = parseInt(line.slice(openSquareBracketIndex + 1, closeSquareBracketIndex)) % nLoops;
+
+		//get values
+		var openCurlyBracketIndex = line.indexOf("{"); 
+		var closeCurlyBracketIndex = line.indexOf("}");
+		var values = (line.slice(openCurlyBracketIndex + 1, closeCurlyBracketIndex)).split(",");
+
+		//parse values to int
+		for(var i = 0; i < values.length; i++) {
+			values[i] = Number(values[i]);
+		}
+
+		//skip if total calls == 0
+		if(values[TOTAL_CALLS_INDEX] == 0)
+			continue;
+
+		//update loopIterInfo
+		var loopId = loopIndexToId[arrayIndex];
+		if(values[MAX_ITERS_INDEX] > loopIterInfo[loopId]["maxIterations"])
+			loopIterInfo[loopId]["maxIterations"] = values[MAX_ITERS_INDEX];		
+		if(values[MIN_ITERS_INDEX] < loopIterInfo[loopId]["minIterations"])
+			loopIterInfo[loopId]["minIterations"] = values[MIN_ITERS_INDEX];		
+		loopIterInfo[loopId]["avgIterations"] += values[SUM_ITERS_INDEX];	
+		loopIterInfo[loopId]["stdDevIterations"] += values[SUM_ITERS_SQUARED_INDEX];	
+		loopIterInfo[loopId]["totalCalls"] += values[TOTAL_CALLS_INDEX];
+		
+	}
+
+	//finish avg and stddev calculations
+	var loopIterInfoIds = Object.keys(loopIterInfo);
+	for(var loopId of loopIterInfoIds) {
+		if(loopIterInfo[loopId]["avgIterations"] == 0)
+			continue;
+		
+		loopIterInfo[loopId]["avgIterations"] /= loopIterInfo[loopId]["totalCalls"];
+		loopIterInfo[loopId]["stdDevIterations"] /= loopIterInfo[loopId]["totalCalls"];
+		loopIterInfo[loopId]["stdDevIterations"] -= Math.pow(loopIterInfo[loopId]["avgIterations"], 2);
+		loopIterInfo[loopId]["stdDevIterations"] = Math.sqrt(loopIterInfo[loopId]["stdDevIterations"]);
+	}
+
+	//update loop without calls
+	for(var loopId of loopIterInfoIds) {
+		if(loopIterInfo[loopId]["avgIterations"] != 0)
+			continue;
+		
+		loopIterInfo[loopId]["maxIterations"] = 0;
+		loopIterInfo[loopId]["minIterations"] = 0;
+		loopIterInfo[loopId]["avgIterations"] = 0;
+		loopIterInfo[loopId]["stdDevIterations"] = 0;
+	}
+
+	updateParLoopItersInfo(parLoops, loopIterInfo);
+}
+
+function updateParLoopItersInfo(parLoops, loopIterInfo) {
+	var parLoopIds = Object.keys(parLoops);
+
+	for(var loopId of parLoopIds) {
+		parLoops[loopId]["maxIterations"] = loopIterInfo[loopId]["maxIterations"];
+		parLoops[loopId]["minIterations"] = loopIterInfo[loopId]["minIterations"];
+		parLoops[loopId]["avgIterations"] = loopIterInfo[loopId]["avgIterations"];
+		parLoops[loopId]["stdDevIterations"] = loopIterInfo[loopId]["stdDevIterations"];
+		parLoops[loopId]["hasIterationVariation"] = parLoops[loopId]["maxIterations"] != parLoops[loopId]["minIterations"];
+		parLoops[loopId]["timesLoopIsCalled"] = loopIterInfo[loopId]["totalCalls"];
+
+		var parentLoopId = parLoops[loopId]["parentLoopId"];
+		if(parentLoopId == "NULL")
+			continue;
+		
+		parLoops[loopId]["maxParentIterations"] = loopIterInfo[parentLoopId]["maxIterations"];
+		parLoops[loopId]["minParentIterations"] = loopIterInfo[parentLoopId]["minIterations"];
+		parLoops[loopId]["avgParentIterations"] = loopIterInfo[parentLoopId]["avgIterations"];
+		parLoops[loopId]["stdDevParentIterations"] = loopIterInfo[parentLoopId]["stdDevIterations"];	
+		parLoops[loopId]["hasParentIterationVariation"] = parLoops[loopId]["maxParentIterations"] != parLoops[loopId]["minParentIterations"];;
+	}
+}
+
+function createLoopIterationObj() {
+	var loopIterationObj = {};
+	
+	loopIterationObj["maxIterations"] = 0;
+	loopIterationObj["minIterations"] = Number.MAX_SAFE_INTEGER;
+	loopIterationObj["avgIterations"] = 0;
+	loopIterationObj["stdDevIterations"] = 0;
+	loopIterationObj["totalCalls"] = 0;
+
+	return loopIterationObj;
+}

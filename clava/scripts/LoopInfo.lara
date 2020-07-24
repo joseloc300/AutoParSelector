@@ -1,0 +1,454 @@
+
+import Utils;
+
+function getLoopInfo(parLoops, loopIterInfo) {
+	var parLoopIds = Object.keys(parLoops);
+	var $loopJps = getLoopsFromIds(parLoopIds);
+
+	var index = 0;
+	for(var loopId of parLoopIds) {
+		var $loop = $loopJps[loopId];
+		var loopInstructionInfo = getInstructionInfo($loop, loopIterInfo);
+		
+		parLoops[loopId]["origLine"] = $loop.line;
+		parLoops[loopId]["nestedLevel"] = $loop.nestedLevel;
+		parLoops[loopId]["isInnermost"] = $loop.isInnermost;
+		parLoops[loopId]["isOutermost"] = $loop.isOutermost;
+		parLoops[loopId]["rank"] = Array.from($loop.rank);
+		parLoops[loopId]["index"] = index;
+		
+		parLoops[loopId]["instructionInfo"] = loopInstructionInfo;
+		
+		index++;
+	}
+}
+
+function getInstructionInfo($loop, loopIterInfo) {
+	var instructionInfo = createInstructionInfoObj();
+	instructionAnalyser($loop, $loop, instructionInfo, loopIterInfo);
+	callAnalyser($loop, instructionInfo, loopIterInfo);
+
+	return instructionInfo;
+}
+
+function createInstructionInfoObj() {
+	var instructionInfo = {};
+	
+	//joinpoints descendant from the loop
+	instructionInfo["joinpoints"] = {};
+	instructionInfo["joinpoints"]["arrayAccess"] = 0;
+	instructionInfo["joinpoints"]["binaryOp"] = 0;
+	instructionInfo["joinpoints"]["call"] = 0;
+	instructionInfo["joinpoints"]["cast"] = 0;
+	instructionInfo["joinpoints"]["deleteExpr"] = 0;
+	instructionInfo["joinpoints"]["expression"] = 0;
+	instructionInfo["joinpoints"]["if"] = 0;
+	instructionInfo["joinpoints"]["loop"] = 0;
+	instructionInfo["joinpoints"]["memberAccess"] = 0;
+	instructionInfo["joinpoints"]["memberCall"] = 0;
+	instructionInfo["joinpoints"]["newExpr"] = 0;
+	instructionInfo["joinpoints"]["op"] = 0;
+	instructionInfo["joinpoints"]["statement"] = 0;
+	instructionInfo["joinpoints"]["unaryOp"] = 0;
+	instructionInfo["joinpoints"]["vardecl"] = 0;
+	instructionInfo["joinpoints"]["varref"] = 0;
+	instructionInfo["joinpointsTotal"] = 0;
+
+	//joinpoints descendant from the loop taking into account inner loops and function calls
+	instructionInfo["recursiveJoinpoints"] = {};
+	instructionInfo["recursiveJoinpoints"]["arrayAccess"] = 0;
+	instructionInfo["recursiveJoinpoints"]["binaryOp"] = 0;
+	instructionInfo["recursiveJoinpoints"]["call"] = 0;
+	instructionInfo["recursiveJoinpoints"]["cast"] = 0;
+	instructionInfo["recursiveJoinpoints"]["deleteExpr"] = 0;
+	instructionInfo["recursiveJoinpoints"]["expression"] = 0;
+	instructionInfo["recursiveJoinpoints"]["if"] = 0;
+	instructionInfo["recursiveJoinpoints"]["loop"] = 0;
+	instructionInfo["recursiveJoinpoints"]["memberAccess"] = 0;
+	instructionInfo["recursiveJoinpoints"]["memberCall"] = 0;
+	instructionInfo["recursiveJoinpoints"]["newExpr"] = 0;
+	instructionInfo["recursiveJoinpoints"]["op"] = 0;
+	instructionInfo["recursiveJoinpoints"]["statement"] = 0;
+	instructionInfo["recursiveJoinpoints"]["unaryOp"] = 0;
+	instructionInfo["recursiveJoinpoints"]["vardecl"] = 0;
+	instructionInfo["recursiveJoinpoints"]["varref"] = 0;
+	instructionInfo["recursiveJoinpointsTotal"] = 0;
+
+	
+
+	//derived info from recursive joinpoints info
+	//arrayAccess
+	instructionInfo["arrayAccessRead"] = 0;
+	instructionInfo["arrayAccessWrite"] = 0;
+	instructionInfo["arrayAccessReadWrite"] = 0;
+
+	//binaryOp
+	instructionInfo["binaryOpArithmetic"] = 0;
+	instructionInfo["binaryOpLogic"] = 0;
+	instructionInfo["binaryOpComparison"] = 0;
+	instructionInfo["binaryOpAssignment"] = 0;
+	instructionInfo["binaryOpBitwise"] = 0;
+	instructionInfo["binaryOpBitwiseAssignment"] = 0;
+	instructionInfo["binaryOpArithmeticAssignment"] = 0;
+
+	//unaryOp
+	instructionInfo["unaryOpArithmetic"] = 0;
+	instructionInfo["unaryOpLogic"] = 0;
+	instructionInfo["unaryOpComparison"] = 0;
+	instructionInfo["unaryOpAssignment"] = 0;
+	instructionInfo["unaryOpBitwise"] = 0;
+	instructionInfo["unaryOpBitwiseAssignment"] = 0;
+	instructionInfo["unaryOpArithmeticAssignment"] = 0;
+
+	//binaryOp + unaryOp
+	instructionInfo["totalArithmetic"] = 0;
+	instructionInfo["totalLogic"] = 0;
+	instructionInfo["totalComparison"] = 0;
+	instructionInfo["totalAssignment"] = 0;
+	instructionInfo["totalBitwise"] = 0;
+	instructionInfo["totalBitwiseAssignment"] = 0;
+	instructionInfo["totalArithmeticAssignment"] = 0;
+
+	//call + memberCall
+	instructionInfo["callAvgNumberArgs"] = 0;
+	instructionInfo["callExternal"] = 0;
+	instructionInfo["callLevel0"] = 0;
+	instructionInfo["callNested"] = 0;
+	instructionInfo["callFunction"] = 0;
+	instructionInfo["callMethod"] = 0;
+	instructionInfo["callInnerJps"] = 0;
+	instructionInfo["callRecursive"] = 0;
+
+	//cast
+	instructionInfo["castImplicit"] = 0;
+	instructionInfo["castExplicit"] = 0;
+
+	//loop
+	instructionInfo["loopFor"] = 0;
+	instructionInfo["loopWhile"] = 0;
+	instructionInfo["loopDoWhile"] = 0;
+	instructionInfo["loopForEach"] = 0;
+
+	//memberAccess
+	instructionInfo["memberAccessRead"] = 0;
+	instructionInfo["memberAccessWrite"] = 0;
+	instructionInfo["memberAccessReadWrite"] = 0;
+
+	//vardecl
+	instructionInfo["vardeclHasInit"] = 0;
+
+	//varref
+	instructionInfo["varrefRead"] = 0;
+	instructionInfo["varrefWrite"] = 0;
+	instructionInfo["varrefReadWrite"] = 0;
+
+	return instructionInfo;
+}
+
+function instructionAnalyser($jp, $mainLoop, instructionInfo, loopIterInfo, isStatic) {
+	var $descendants = getJPDescendants($jp, $mainLoop, instructionInfo, loopIterInfo);
+	
+	arrayAccessesAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo);
+	unaryBinaryOpsAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo);
+	castAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo);
+	expressionAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo);
+	loopAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo);
+	memberAccessAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo);
+	vardeclAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo);
+	varrefAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo);
+
+	return $descendants["total"];
+}
+
+function callAnalyser($mainLoop, instructionInfo, loopIterInfo) {
+	var $calls = $mainLoop.descendants("call");
+
+	for(var $call of $calls) {
+		instructionInfo["callLevel0"] += 1;
+		instructionInfo["callAvgNumberArgs"] += $call.numArgs;
+		
+		if($call.instanceOf("memberCall"))
+			instructionInfo["callMethod"] += 1;
+		else
+			instructionInfo["callFunction"] += 1;
+	
+		var $function = $call.function;
+		var functionId = $function.id;
+		var $functionDefinition = $function.definitionJp;
+
+		if(typeof $functionDefinition === "undefined") {
+			instructionInfo["callExternal"] += 1;
+			continue;
+		}
+
+		var callStack = [];
+		callAnalyserAux($functionDefinition, $mainLoop, functionId, callStack, instructionInfo, loopIterInfo);	
+	}
+	if(instructionInfo["joinpoints"]["call"] > 0)
+		instructionInfo["callAvgNumberArgs"] /= instructionInfo["joinpoints"]["call"];
+}
+
+function callAnalyserAux($functionDefinition, $mainLoop, functionId, callStack, instructionInfo, loopIterInfo) {
+	if(callStack.contains(functionId)) {
+		instructionInfo["callRecursive"] += 1;
+		return;
+	}
+
+	var nFoundJps = instructionAnalyser($functionDefinition, $mainLoop, instructionInfo, loopIterInfo);
+	instructionInfo["callInnerJps"] += nFoundJps;
+
+	var $calls = $functionDefinition.descendants("call");
+
+	for(var $call of $calls) {
+		instructionInfo["callNested"] += 1;
+
+		if($call.instanceOf("memberCall"))
+			instructionInfo["callMethod"] += 1;
+		else
+			instructionInfo["callFunction"] += 1;
+	
+		var $function = $call.function;
+		var functionId = $function.id;
+		var $functionDefinition = $function.definitionJp;
+
+		if(typeof $functionDefinition === "undefined") {
+			instructionInfo["callExternal"] += 1;
+			continue;
+		}
+		
+		var callStack = Array.from(callStack);
+		callStack.push(functionId);
+
+		callAnalyserAux($functionDefinition, $mainLoop, functionId, callStack, instructionInfo, loopIterInfo);
+	}
+
+	return;
+}
+
+function getJPDescendants($targetJp, $mainLoop, instructionInfo, loopIterInfo) {
+	var jpTypes = Object.keys(instructionInfo["joinpoints"]);
+	var $descendants = {};
+	$descendants["total"] = 0;
+
+	for(var jpType of jpTypes) {
+		$descendants[jpType] = $targetJp.descendants(jpType);
+
+		if($targetJp.instanceOf("loop") && $targetJp.id == $mainLoop.id) {
+			instructionInfo["joinpoints"][jpType] += $descendants[jpType].length;
+			instructionInfo["joinpointsTotal"] += $descendants[jpType].length;
+		}
+
+		//go $jp by $jp and calculate avg times they will be run per main loop iteration
+		for(var $descendant of $descendants[jpType]) {
+			var iterMultiplier = getJpMultiplier($descendant, $mainLoop, loopIterInfo);
+			instructionInfo["recursiveJoinpoints"][jpType] += iterMultiplier;
+			instructionInfo["recursiveJoinpointsTotal"] += iterMultiplier;
+			$descendants["total"] += iterMultiplier;
+		}
+		
+	}
+
+	return $descendants;
+}
+
+function getJpMultiplier($jp, $mainLoop, loopIterInfo) {
+	var iterMultiplier = 1;
+	var $currentLoop = $jp.ancestor("loop");
+	while(typeof $currentLoop !== "undefined" && $currentLoop.id != $mainLoop.id) {
+		iterMultiplier *= loopIterInfo[$currentLoop.id]["avgIterations"];
+		$currentLoop = $currentLoop.ancestor("loop");
+	}
+	return iterMultiplier;
+}
+
+function arrayAccessesAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo) {
+	for(var $arrayAccess of $descendants["arrayAccess"]) {
+		var iterMultiplier = getJpMultiplier($arrayAccess, $mainLoop, loopIterInfo);
+		var use = $arrayAccess.use;
+		switch(use) {
+			case "read":
+				instructionInfo["arrayAccessRead"] += iterMultiplier;
+				break;
+			case "write":
+				instructionInfo["arrayAccessWrite"] += iterMultiplier;
+				break;
+			case "readwrite":
+				instructionInfo["arrayAccessReadWrite"] += iterMultiplier;
+				break;
+		}
+	}
+}
+
+function unaryBinaryOpsAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo) {
+	var arithmeticOperators = ["+", "-", "*", "/", "%", "++", "--"];
+	var logicOperators = ["||", "&&", "!"];
+	var comparisonOperators = ["==", "!=", "<", "<=", ">", ">="];
+	var assignmentOperators = ["="];
+	var bitwiseOperators = ["&", "|", "^", "~", "<<", ">>"];
+	var arithmeticAssignmentOperators = ["+=", "-=", "*=", "/=", "%="];
+	var bitwiseAssignmentOperators = ["&=", "|=", "^=", ">>=", "<<="];
+
+	for(var $binaryOp of $descendants["binaryOp"]) {
+		var iterMultiplier = getJpMultiplier($binaryOp, $mainLoop, loopIterInfo);
+		
+		if(arithmeticOperators.contains($binaryOp.operator)) {
+			instructionInfo["binaryOpArithmetic"] += iterMultiplier;
+			instructionInfo["totalArithmetic"] += iterMultiplier;
+		}
+		else if(logicOperators.contains($binaryOp.operator)) {
+			instructionInfo["binaryOpLogic"] += iterMultiplier;
+			instructionInfo["totalLogic"] += iterMultiplier;
+		}
+		else if(comparisonOperators.contains($binaryOp.operator)) {
+			instructionInfo["binaryOpComparison"] += iterMultiplier;
+			instructionInfo["totalComparison"] += iterMultiplier;
+		}
+		else if(assignmentOperators.contains($binaryOp.operator)) {
+			instructionInfo["binaryOpAssignment"] += iterMultiplier;
+			instructionInfo["totalAssignment"] += iterMultiplier;
+		}
+		else if(bitwiseOperators.contains($binaryOp.operator)) {
+			instructionInfo["binaryOpBitwise"] += iterMultiplier;
+			instructionInfo["totalBitwise"] += iterMultiplier;
+		}
+		else if(bitwiseAssignmentOperators.contains($binaryOp.operator)) {
+			instructionInfo["binaryOpBitwiseAssignment"] += iterMultiplier;
+			instructionInfo["binaryOpBitwise"] += iterMultiplier;
+			instructionInfo["binaryOpAssignment"] += iterMultiplier;
+			instructionInfo["totalAssignment"] += iterMultiplier;
+			instructionInfo["totalBitwise"] += iterMultiplier;
+			instructionInfo["totalBitwiseAssignment"] += iterMultiplier;
+		}
+		else if(arithmeticAssignmentOperators.contains($binaryOp.operator)) {
+			instructionInfo["binaryOpArithmeticAssignment"] += iterMultiplier;
+			instructionInfo["binaryOpArithmetic"] += iterMultiplier;
+			instructionInfo["binaryOpAssignment"] += iterMultiplier;
+			instructionInfo["totalAssignment"] += iterMultiplier;
+			instructionInfo["totalArithmetic"] += iterMultiplier;
+			instructionInfo["totalArithmeticAssignment"] += iterMultiplier;
+		}
+		
+	}
+
+	for(var $unaryOp of $descendants["unaryOp"]) {
+		var iterMultiplier = getJpMultiplier($unaryOp, $mainLoop, loopIterInfo);
+	
+		if(arithmeticOperators.contains($unaryOp.operator)) {
+			instructionInfo["unaryOpArithmetic"] += iterMultiplier;
+			instructionInfo["totalArithmetic"] += iterMultiplier;
+		}
+		else if(logicOperators.contains($unaryOp.operator)) {
+			instructionInfo["unaryOpLogic"] += iterMultiplier;
+			instructionInfo["totalLogic"] += iterMultiplier;
+		}
+		else if(comparisonOperators.contains($unaryOp.operator)) {
+			instructionInfo["unaryOpComparison"] += iterMultiplier;
+			instructionInfo["totalComparison"] += iterMultiplier;
+		}
+		else if(assignmentOperators.contains($unaryOp.operator)) {
+			instructionInfo["unaryOpAssignment"] += iterMultiplier;
+			instructionInfo["totalAssignment"] += iterMultiplier;
+		}
+		else if(bitwiseOperators.contains($unaryOp.operator)) {
+			instructionInfo["unaryOpBitwise"] += iterMultiplier;
+			instructionInfo["totalBitwise"] += iterMultiplier;
+		}
+		else if(bitwiseAssignmentOperators.contains($unaryOp.operator)) {
+			instructionInfo["unaryOpBitwiseAssignment"] += iterMultiplier;
+			instructionInfo["unaryOpBitwise"] += iterMultiplier;
+			instructionInfo["unaryOpAssignment"] += iterMultiplier;
+			instructionInfo["totalAssignment"] += iterMultiplier;
+			instructionInfo["totalBitwise"] += iterMultiplier;
+			instructionInfo["totalBitwiseAssignment"] += iterMultiplier;
+		}
+		else if(arithmeticAssignmentOperators.contains($unaryOp.operator)) {
+			instructionInfo["unaryOpArithmeticAssignment"] += iterMultiplier;
+			instructionInfo["unaryOpArithmetic"] += iterMultiplier;
+			instructionInfo["unaryOpAssignment"] += iterMultiplier;
+			instructionInfo["totalAssignment"] += iterMultiplier;
+			instructionInfo["totalArithmetic"] += iterMultiplier;
+			instructionInfo["totalArithmeticAssignment"] += iterMultiplier;
+		}
+	}
+}
+
+function castAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo) {
+	for(var $cast of $descendants["cast"]) {
+		var iterMultiplier = getJpMultiplier($cast, $mainLoop, loopIterInfo);
+		instructionInfo["castExplicit"] += iterMultiplier;
+	}
+}
+
+function expressionAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo) {
+	for(var $expression of $descendants["expression"]) {
+		var iterMultiplier = getJpMultiplier($expression, $mainLoop, loopIterInfo);
+		if(typeof $expression.implicitCast !== "undefined")
+			instructionInfo["castImplicit"] += iterMultiplier;
+	}
+}
+
+function loopAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo) {
+	for(var $loop of $descendants["loop"]) {
+		var iterMultiplier = getJpMultiplier($loop, $mainLoop, loopIterInfo);
+		var kind = $loop.kind;
+		switch(kind) {
+			case "for":
+				instructionInfo["loopFor"] += iterMultiplier;
+				break;
+			case "while":
+				instructionInfo["loopWhile"] += iterMultiplier;
+				break;
+			case "dowhile":
+				instructionInfo["loopDoWhile"] += iterMultiplier;
+				break;
+			case "foreach":
+				instructionInfo["loopForEach"] += iterMultiplier;
+				break;
+		}
+	}
+}
+
+function memberAccessAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo) {
+	for(var $memberAccess of $descendants["memberAccess"]) {
+		var iterMultiplier = getJpMultiplier($memberAccess, $mainLoop, loopIterInfo);
+		var use = $memberAccess.use;
+		switch(use) {
+			case "read":
+				instructionInfo["memberAccessRead"] += iterMultiplier;
+				break;
+			case "write":
+				instructionInfo["memberAccessWrite"] += iterMultiplier;
+				break;
+			case "readwrite":
+				instructionInfo["memberAccessReadWrite"] += iterMultiplier;
+				break;
+		}
+	}
+}
+
+function vardeclAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo) {
+	for(var $vardecl of $descendants["vardecl"]) {
+		var iterMultiplier = getJpMultiplier($vardecl, $mainLoop, loopIterInfo);	
+		if($vardecl.hasInit)
+			instructionInfo["vardeclHasInit"] += iterMultiplier;
+	}
+}
+
+function varrefAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo) {
+	for(var $varref of $descendants["varref"]) {
+		var iterMultiplier = getJpMultiplier($varref, $mainLoop, loopIterInfo);
+		var use = $varref.use;
+		switch(use) {
+			case "read":
+				instructionInfo["varrefRead"] += iterMultiplier;
+				break;
+			case "write":
+				instructionInfo["varrefWrite"] += iterMultiplier;
+				break;
+			case "readwrite":
+				instructionInfo["varrefReadWrite"] += iterMultiplier;
+				break;
+		}
+	}
+}
+

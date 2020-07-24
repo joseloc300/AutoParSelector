@@ -12,6 +12,8 @@ import lara.Strings;
 
 import CustomExecutionTimeMetric;
 import CustomParallelize;
+import IterCounting;
+import LoopInfo;
 import Utils;
 
 aspectdef ProgramAnalyzer
