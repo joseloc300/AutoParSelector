@@ -1,0 +1,27 @@
+{
+  "sampling_params": {
+    "train_ratio": 0.8,
+    "block_size": 10,
+    "stratify": true,
+    "randomize": true,
+    "r_seed": null,
+    "r_shuffles": null
+  },
+  "feature_selection_params": {
+    "enabled": true,
+    "automatic": -1,
+    "manual_config": {
+
+    }
+  },
+
+
+  "read_data_mode": 2,
+
+  "scoring_params": {
+    "score_on_all_test_data": true,
+    "score_only_on_polybench_test_data": false,
+    "score_only_on_nas_test_data": false
+  }
+
+}
