@@ -1,11 +1,12 @@
 {
 	"benchGroupName": "polybench-c-3.2",
-	"sourceFolder": "./sources/polybench-c-3.2/",
-	"benchmarkFolders": [
-		"stencils/seidel-2d/"
-	],
 	"nRuns": 3,
 	"loopGroupSizeLimit": 1,
+	"sourceFolder": "./sources/polybench-c-3.2/",
+	"isBenchmarkSet": true,
+	"benchmarkFolders": [
+		"all"
+	],
 	"functionFilters": [
 		"kernel_"
 	],
@@ -17,12 +18,6 @@
 		"-DEXTRALARGE_DATASET"
 	],
 	"defaultFlag": "-DSTANDARD_DATASET",
-	"allFolders": [
-		"datamining",
-		"linear-algebra",
-		"medley",
-		"stencils"
-	],
 	"foldersToGetExpectedC": [],
 	"excludedFiles": [],
 	"excludedFolders": [
@@ -43,11 +38,14 @@
 		"m"
 	],
 	"preprocessorFlags": [],
-	"clavaFlags": {
+	"expectedReturnValue": 0,
+	"autoParSelectorFlags": {
 		"testPragmas": 2,
 		"readCache": false,
 		"readFromExpectedOutput": false,
 		"onlyCalculateCaches": false,
-		"expressionBasedIterCounting": false
+		"expressionBasedIterCounting": true,
+		"cleanBuilds": true,
+		"extractDynamicFeatures": true
 	}
 }

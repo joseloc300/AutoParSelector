@@ -27,7 +27,7 @@ aspectdef ProgramAnalyzer
 	var start_time = performance.now();
 	var AnalyzerResults = createBenchGroupResultsObj(params["loopGroupSizeLimit"]);
 
-	var benchmarks = getSubFolders(params);
+	var benchmarks = getBenchmarks(params);
 
 	var autoParLoopItersFolder = Io.getAbsolutePath("extraIncludes/");
 	var autoParLoopItersHPath = Io.getPath(autoParLoopItersFolder, "autopar_loop_iters.h");
@@ -38,25 +38,34 @@ aspectdef ProgramAnalyzer
 	loopItersFiles["autoParLoopItersHPath"] = autoParLoopItersHPath;
 	loopItersFiles["autoParLoopItersCPath"] = autoParLoopItersCPath;
 
+	var problemSizeFlags = params["problemSizeFlags"];
+	if(problemSizeFlags.length == 0) {
+		problemSizeFlags = [""];
+	}
+
 	println("Number of benchmarks found: " + benchmarks.length);
 	println("Processing benchmarks");
 	for (var benchmark of benchmarks) {
 		println("Processing: " + benchmark.folder);
+		
+		for(var problemSizeFlag of problemSizeFlags) {
 
-		for(var problemSizeFlag of params["problemSizeFlags"]) {
-			println("Current problem size flag = " + problemSizeFlag);
+			if(problemSizeFlag != "") {
+				println("Current problem size flag = " + problemSizeFlag);
+			}
+			
 			Clava.pushAst();
 
 			updateDynamicParams(params, benchmark, problemSizeFlag);
 			rebuildCodeAst(params, params["xtraFiles"], params["xtraIncludeFolders"], false);
 
-			var parLoops;
-			var parLoopGroups;
-			var benchmarkResults;
-			var loopIterInfo;
-			var removedPragmas;
+			var parLoops = null;
+			var parLoopGroups = null;
+			var benchmarkResults = null;
+			var loopIterInfo = null;
+			var removedPragmas = null;
 			
-			if(params["clavaFlags"]["readCache"]) {
+			if(params["autoParSelectorFlags"]["readCache"]) {
 				parLoops = getObjFromCache(params, "parLoops");
 				
 				if(checkEmptyParLoops(parLoops, params)) {
@@ -64,7 +73,9 @@ aspectdef ProgramAnalyzer
 					continue;
 				}
 
-				loopIterInfo = getObjFromCache(params, "loopIterInfo");
+				if(params["autoParSelectorFlags"]["extractDynamicFeatures"] == 0) {
+					loopIterInfo = getObjFromCache(params, "loopIterInfo");
+				}
 				parLoopGroups = getObjFromCache(params, "parLoopGroups");
 				benchmarkResults = getObjFromCache(params, "benchmarkResults");
 			}
@@ -86,11 +97,13 @@ aspectdef ProgramAnalyzer
 					Clava.popAst();
 					continue;
 				}
-				
-				loopIterInfo = countLoopIterations(parLoops, params, loopItersFiles);
+
+				if(params["autoParSelectorFlags"]["extractDynamicFeatures"]) {
+					loopIterInfo = countLoopIterations(parLoops, params, loopItersFiles);
+				}
 
 				parLoopGroups = getParLoopGroups(parLoops, params["loopGroupSizeLimit"]);
-				getLoopInfo(parLoops, loopIterInfo);
+				getLoopInfo(parLoops, loopIterInfo, params["autoParSelectorFlags"]["extractDynamicFeatures"]);
 
 				benchmarkResults = createBenchResultsObj(benchmark, problemSizeFlag);
 				addLoopInfo(parLoops, benchmarkResults);
@@ -104,7 +117,7 @@ aspectdef ProgramAnalyzer
 			}
 
 			//if only calculating caches skip timing the benchmarks
-			if(params["clavaFlags"]["onlyCalculateCaches"]) {
+			if(params["autoParSelectorFlags"]["onlyCalculateCaches"]) {
 				Clava.popAst();
 				continue;
 			}
@@ -120,7 +133,7 @@ aspectdef ProgramAnalyzer
 				addPragmas(loopGroup, parLoops);
 	
 				var measuresPar = addTimerPar(loopGroup, parLoops);
-				var executorsPar = buildAndRun(params, version, params["nRuns"], true);	
+				var executorsPar = buildAndRun(params, version, params["nRuns"], true, params["autoParSelectorFlags"]["cleanBuilds"]);	
 				addResults(benchmarkResults, measuresPar, executorsPar, version, loopGroup, parLoops);
 				version++;
 				Clava.popAst();
@@ -129,7 +142,7 @@ aspectdef ProgramAnalyzer
 			var mainLoopIds = getMainLoopIds(parLoops);
 	
 			var measuresSeq = addTimerSeq(mainLoopIds, parLoops);
-			var executorsSeq = buildAndRun(params, version, params["nRuns"], false);
+			var executorsSeq = buildAndRun(params, version, params["nRuns"], false, params["autoParSelectorFlags"]["cleanBuilds"]);
 			
 			version = -1;
 			addResults(benchmarkResults, measuresSeq, executorsSeq, version, loopGroup, parLoops);

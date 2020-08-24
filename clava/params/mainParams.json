@@ -1,6 +1,8 @@
 {
+    "displayParamsHelp": true,
     "paramsToCreate": [],
     "paramsToLoad": [
-        "polybench-c-4.2"
-    ]
+        "megablocks"
+    ],
+    "modelResultsToTest": []
 }

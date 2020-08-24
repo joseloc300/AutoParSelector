@@ -1,0 +1,9 @@
+aspectdef ModelTester
+	input
+		originalResults,
+		now
+	end
+
+	
+
+end

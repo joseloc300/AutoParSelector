@@ -1,35 +1,18 @@
 {
-	"benchGroupName": "NAS",
+	"benchGroupName": "texas_42",
 	"nRuns": 3,
 	"loopGroupSizeLimit": 1,
-	"sourceFolder": "./sources/NAS/",
+	"sourceFolder": "./sources/TEXAS_42/",
 	"isBenchmarkSet": true,
 	"benchmarkFolders": [
 		"all"
 	],
-	"functionFilters": [
-		""
-	],
-	"problemSizeFlags": [
-		"-DCLASS_S",
-		"-DCLASS_W",
-		"-DCLASS_A"
-	],
-	"defaultFlag": "-DCLASS_W",
-	"foldersToGetExpectedC": [
-		"BT",
-		"EP",
-		"FT",
-		"IS",
-		"LU",
-		"MG"
-	],
-	"excludedFiles": [
-		"expected_output.c"
-	],
-	"excludedFolders": [
-		"test"
-	],
+	"functionFilters": [],
+	"problemSizeFlags": [],
+	"defaultFlag": "",
+	"foldersToGetExpectedC": [],
+	"excludedFiles": [],
+	"excludedFolders": [],
 	"xtraFiles": [],
 	"xtraIncludeFolders": [],
 	"compilationFlags": [
@@ -40,11 +23,11 @@
 		"m"
 	],
 	"preprocessorFlags": [],
-	"expectedReturnValue": 0,
+	"expectedReturnValue": 10,
 	"autoParSelectorFlags": {
 		"testPragmas": 2,
 		"readCache": false,
-		"readFromExpectedOutput": true,
+		"readFromExpectedOutput": false,
 		"onlyCalculateCaches": false,
 		"expressionBasedIterCounting": true,
 		"cleanBuilds": true,

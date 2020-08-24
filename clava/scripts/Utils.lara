@@ -17,28 +17,6 @@ function getLoopIndexes(loopGroup, parLoops) {
 
 	return indexes;
 }
-/*
-function getLoopInfo(parLoops, loopIterInfo) {
-	var parLoopIds = Object.keys(parLoops);
-	var $loopJps = getLoopsFromIds(parLoopIds);
-
-	var index = 0;
-	for(var loopId of parLoopIds) {
-		var $loop = $loopJps[loopId];
-		var loopInstructionInfo = getInstructionInfo($loop, loopIterInfo);
-		
-		parLoops[loopId]["origLine"] = $loop.line;
-		parLoops[loopId]["nestedLevel"] = $loop.nestedLevel;
-		parLoops[loopId]["isInnermost"] = $loop.isInnermost;
-		parLoops[loopId]["isOutermost"] = $loop.isOutermost;
-		parLoops[loopId]["rank"] = Array.from($loop.rank);
-		parLoops[loopId]["index"] = index;
-		
-		parLoops[loopId]["instructionInfo"] = loopInstructionInfo;
-		
-		index++;
-	}
-}*/
 
 function addLoopInfo(parLoops, benchmarkResults) {
 	benchmarkResults["nLoops"] = parLoops.length;
@@ -50,456 +28,6 @@ function addLoopInfo(parLoops, benchmarkResults) {
 		benchmarkResults["loops"][index] = parLoops[loopId];
 	}
 }
-/*
-function createInstructionInfoObj() {
-	var instructionInfo = {};
-	
-	//joinpoints descendant from the loop
-	instructionInfo["joinpoints"] = {};
-	instructionInfo["joinpoints"]["arrayAccess"] = 0;
-	instructionInfo["joinpoints"]["binaryOp"] = 0;
-	instructionInfo["joinpoints"]["call"] = 0;
-	instructionInfo["joinpoints"]["cast"] = 0;
-	//instructionInfo["joinpoints"]["decl"] = 0;
-	//instructionInfo["joinpoints"]["declarator"] = 0;
-	instructionInfo["joinpoints"]["deleteExpr"] = 0;
-	//instructionInfo["joinpoints"]["enumDecl"] = 0;
-	//instructionInfo["joinpoints"]["enumeratorDecl"] = 0;
-	instructionInfo["joinpoints"]["expression"] = 0;
-	instructionInfo["joinpoints"]["if"] = 0;
-	instructionInfo["joinpoints"]["loop"] = 0;
-	instructionInfo["joinpoints"]["memberAccess"] = 0;
-	instructionInfo["joinpoints"]["memberCall"] = 0;
-	//instructionInfo["joinpoints"]["namedDecl"] = 0;
-	instructionInfo["joinpoints"]["newExpr"] = 0;
-	instructionInfo["joinpoints"]["op"] = 0;
-	//instructionInfo["joinpoints"]["returnStmt"] = 0;
-	instructionInfo["joinpoints"]["statement"] = 0;
-	//instructionInfo["joinpoints"]["typeDefDecl"] = 0;
-	//instructionInfo["joinpoints"]["typeDefNameDecl"] = 0;
-	//instructionInfo["joinpoints"]["unaryExprOrType"] = 0;
-	instructionInfo["joinpoints"]["unaryOp"] = 0;
-	instructionInfo["joinpoints"]["vardecl"] = 0;
-	instructionInfo["joinpoints"]["varref"] = 0;
-	instructionInfo["joinpointsTotal"] = 0;
-
-	//joinpoints descendant from the loop taking into account inner loops and function calls
-	instructionInfo["recursiveJoinpoints"] = {};
-	instructionInfo["recursiveJoinpoints"]["arrayAccess"] = 0;
-	instructionInfo["recursiveJoinpoints"]["binaryOp"] = 0;
-	instructionInfo["recursiveJoinpoints"]["call"] = 0;
-	instructionInfo["recursiveJoinpoints"]["cast"] = 0;
-	//instructionInfo["recursiveJoinpoints"]["decl"] = 0;
-	//instructionInfo["recursiveJoinpoints"]["declarator"] = 0;
-	instructionInfo["recursiveJoinpoints"]["deleteExpr"] = 0;
-	//instructionInfo["recursiveJoinpoints"]["enumDecl"] = 0;
-	//instructionInfo["recursiveJoinpoints"]["enumeratorDecl"] = 0;
-	instructionInfo["recursiveJoinpoints"]["expression"] = 0;
-	instructionInfo["recursiveJoinpoints"]["if"] = 0;
-	instructionInfo["recursiveJoinpoints"]["loop"] = 0;
-	instructionInfo["recursiveJoinpoints"]["memberAccess"] = 0;
-	instructionInfo["recursiveJoinpoints"]["memberCall"] = 0;
-	//instructionInfo["recursiveJoinpoints"]["namedDecl"] = 0;
-	instructionInfo["recursiveJoinpoints"]["newExpr"] = 0;
-	instructionInfo["recursiveJoinpoints"]["op"] = 0;
-	//instructionInfo["recursiveJoinpoints"]["returnStmt"] = 0;
-	instructionInfo["recursiveJoinpoints"]["statement"] = 0;
-	//instructionInfo["recursiveJoinpoints"]["typeDefDecl"] = 0;
-	//instructionInfo["recursiveJoinpoints"]["typeDefNameDecl"] = 0;
-	//instructionInfo["recursiveJoinpoints"]["unaryExprOrType"] = 0;
-	instructionInfo["recursiveJoinpoints"]["unaryOp"] = 0;
-	instructionInfo["recursiveJoinpoints"]["vardecl"] = 0;
-	instructionInfo["recursiveJoinpoints"]["varref"] = 0;
-	instructionInfo["recursiveJoinpointsTotal"] = 0;
-
-	
-
-	//derived info from recursive joinpoints info
-	//arrayAccess
-	instructionInfo["arrayAccessRead"] = 0;
-	instructionInfo["arrayAccessWrite"] = 0;
-	instructionInfo["arrayAccessReadWrite"] = 0;
-
-	//binaryOp
-	instructionInfo["binaryOpArithmetic"] = 0;
-	instructionInfo["binaryOpLogic"] = 0;
-	instructionInfo["binaryOpComparison"] = 0;
-	instructionInfo["binaryOpAssignment"] = 0;
-	instructionInfo["binaryOpBitwise"] = 0;
-	instructionInfo["binaryOpBitwiseAssignment"] = 0;
-	instructionInfo["binaryOpArithmeticAssignment"] = 0;
-
-	//unaryOp
-	instructionInfo["unaryOpArithmetic"] = 0;
-	instructionInfo["unaryOpLogic"] = 0;
-	instructionInfo["unaryOpComparison"] = 0;
-	instructionInfo["unaryOpAssignment"] = 0;
-	instructionInfo["unaryOpBitwise"] = 0;
-	instructionInfo["unaryOpBitwiseAssignment"] = 0;
-	instructionInfo["unaryOpArithmeticAssignment"] = 0;
-
-	//binaryOp + unaryOp
-	instructionInfo["totalArithmetic"] = 0;
-	instructionInfo["totalLogic"] = 0;
-	instructionInfo["totalComparison"] = 0;
-	instructionInfo["totalAssignment"] = 0;
-	instructionInfo["totalBitwise"] = 0;
-	instructionInfo["totalBitwiseAssignment"] = 0;
-	instructionInfo["totalArithmeticAssignment"] = 0;
-
-	//call + memberCall
-	instructionInfo["callAvgNumberArgs"] = 0;
-	instructionInfo["callExternal"] = 0;
-	instructionInfo["callLevel0"] = 0;
-	instructionInfo["callNested"] = 0;
-	instructionInfo["callFunction"] = 0;
-	instructionInfo["callMethod"] = 0;
-	instructionInfo["callInnerJps"] = 0;
-	instructionInfo["callRecursive"] = 0;
-
-	//cast
-	instructionInfo["castImplicit"] = 0;
-	instructionInfo["castExplicit"] = 0;
-
-	//loop
-	instructionInfo["loopFor"] = 0;
-	instructionInfo["loopWhile"] = 0;
-	instructionInfo["loopDoWhile"] = 0;
-	instructionInfo["loopForEach"] = 0;
-
-	//memberAccess
-	instructionInfo["memberAccessRead"] = 0;
-	instructionInfo["memberAccessWrite"] = 0;
-	instructionInfo["memberAccessReadWrite"] = 0;
-
-	//vardecl
-	instructionInfo["vardeclHasInit"] = 0;
-	//instructionInfo["vardeclGlobal"] = 0;
-	//instructionInfo["vardeclParam"] = 0;
-
-	//varref
-	instructionInfo["varrefRead"] = 0;
-	instructionInfo["varrefWrite"] = 0;
-	instructionInfo["varrefReadWrite"] = 0;
-
-	return instructionInfo;
-}*/
-/*
-function getInstructionInfo($loop, loopIterInfo) {
-	var instructionInfo = createInstructionInfoObj();
-	instructionAnalyser($loop, $loop, instructionInfo, loopIterInfo);
-	callAnalyser($loop, instructionInfo, loopIterInfo);
-
-	return instructionInfo;
-}*/
-/*
-function getJPDescendants($targetJp, $mainLoop, instructionInfo, loopIterInfo) {
-	var jpTypes = Object.keys(instructionInfo["joinpoints"]);
-	var $descendants = {};
-	$descendants["total"] = 0;
-
-	for(var jpType of jpTypes) {
-		$descendants[jpType] = $targetJp.descendants(jpType);
-
-		if($targetJp.instanceOf("loop") && $targetJp.id == $mainLoop.id) {
-			instructionInfo["joinpoints"][jpType] += $descendants[jpType].length;
-			instructionInfo["joinpointsTotal"] += $descendants[jpType].length;
-		}
-
-		//go $jp by $jp and calculate avg times they will be run per main loop iteration
-		for(var $descendant of $descendants[jpType]) {
-			var iterMultiplier = getJpMultiplier($descendant, $mainLoop, loopIterInfo);
-			instructionInfo["recursiveJoinpoints"][jpType] += iterMultiplier;
-			instructionInfo["recursiveJoinpointsTotal"] += iterMultiplier;
-			$descendants["total"] += iterMultiplier;
-		}
-		
-	}
-
-	return $descendants;
-}
-
-function getJpMultiplier($jp, $mainLoop, loopIterInfo) {
-	var iterMultiplier = 1;
-	var $currentLoop = $jp.ancestor("loop");
-	while(typeof $currentLoop !== "undefined" && $currentLoop.id != $mainLoop.id) {
-		iterMultiplier *= loopIterInfo[$currentLoop.id]["avgIterations"];
-		$currentLoop = $currentLoop.ancestor("loop");
-	}
-	return iterMultiplier;
-}*/
-/*
-function callAnalyser($mainLoop, instructionInfo, loopIterInfo) {
-	var $calls = $mainLoop.descendants("call");
-
-	for(var $call of $calls) {
-		instructionInfo["callLevel0"] += 1;
-		instructionInfo["callAvgNumberArgs"] += $call.numArgs;
-		
-		if($call.instanceOf("memberCall"))
-			instructionInfo["callMethod"] += 1;
-		else
-			instructionInfo["callFunction"] += 1;
-	
-		var $function = $call.function;
-		var functionId = $function.id;
-		var $functionDefinition = $function.definitionJp;
-
-		if(typeof $functionDefinition === "undefined") {
-			instructionInfo["callExternal"] += 1;
-			continue;
-		}
-
-		var callStack = [];
-		callAnalyserAux($functionDefinition, $mainLoop, functionId, callStack, instructionInfo, loopIterInfo);	
-	}
-	if(instructionInfo["joinpoints"]["call"] > 0)
-		instructionInfo["callAvgNumberArgs"] /= instructionInfo["joinpoints"]["call"];
-}
-
-function callAnalyserAux($functionDefinition, $mainLoop, functionId, callStack, instructionInfo, loopIterInfo) {
-	if(callStack.contains(functionId)) {
-		instructionInfo["callRecursive"] += 1;
-		return;
-	}
-
-	var nFoundJps = instructionAnalyser($functionDefinition, $mainLoop, instructionInfo, loopIterInfo);
-	instructionInfo["callInnerJps"] += nFoundJps;
-
-	var $calls = $functionDefinition.descendants("call");
-
-	for(var $call of $calls) {
-		instructionInfo["callNested"] += 1;
-
-		if($call.instanceOf("memberCall"))
-			instructionInfo["callMethod"] += 1;
-		else
-			instructionInfo["callFunction"] += 1;
-	
-		var $function = $call.function;
-		var functionId = $function.id;
-		var $functionDefinition = $function.definitionJp;
-
-		if(typeof $functionDefinition === "undefined") {
-			instructionInfo["callExternal"] += 1;
-			continue;
-		}
-		
-		var callStack = Array.from(callStack);
-		callStack.push(functionId);
-
-		callAnalyserAux($functionDefinition, $mainLoop, functionId, callStack, instructionInfo, loopIterInfo);
-	}
-
-	return;
-}*/
-/*
-function instructionAnalyser($jp, $mainLoop, instructionInfo, loopIterInfo, isStatic) {
-	var $descendants = getJPDescendants($jp, $mainLoop, instructionInfo, loopIterInfo);
-	
-	arrayAccessesAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo);
-	unaryBinaryOpsAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo);
-	castAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo);
-	expressionAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo);
-	loopAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo);
-	memberAccessAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo);
-	vardeclAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo);
-	varrefAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo);
-
-	return $descendants["total"];
-}*/
-/*
-function arrayAccessesAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo) {
-	for(var $arrayAccess of $descendants["arrayAccess"]) {
-		var iterMultiplier = getJpMultiplier($arrayAccess, $mainLoop, loopIterInfo);
-		var use = $arrayAccess.use;
-		switch(use) {
-			case "read":
-				instructionInfo["arrayAccessRead"] += iterMultiplier;
-				break;
-			case "write":
-				instructionInfo["arrayAccessWrite"] += iterMultiplier;
-				break;
-			case "readwrite":
-				instructionInfo["arrayAccessReadWrite"] += iterMultiplier;
-				break;
-		}
-	}
-}
-
-function unaryBinaryOpsAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo) {
-	var arithmeticOperators = ["+", "-", "*", "/", "%", "++", "--"];
-	var logicOperators = ["||", "&&", "!"];
-	var comparisonOperators = ["==", "!=", "<", "<=", ">", ">="];
-	var assignmentOperators = ["="];
-	var bitwiseOperators = ["&", "|", "^", "~", "<<", ">>"];
-	var arithmeticAssignmentOperators = ["+=", "-=", "*=", "/=", "%="];
-	var bitwiseAssignmentOperators = ["&=", "|=", "^=", ">>=", "<<="];
-
-	for(var $binaryOp of $descendants["binaryOp"]) {
-		var iterMultiplier = getJpMultiplier($binaryOp, $mainLoop, loopIterInfo);
-		
-		if(arithmeticOperators.contains($binaryOp.operator)) {
-			instructionInfo["binaryOpArithmetic"] += iterMultiplier;
-			instructionInfo["totalArithmetic"] += iterMultiplier;
-		}
-		else if(logicOperators.contains($binaryOp.operator)) {
-			instructionInfo["binaryOpLogic"] += iterMultiplier;
-			instructionInfo["totalLogic"] += iterMultiplier;
-		}
-		else if(comparisonOperators.contains($binaryOp.operator)) {
-			instructionInfo["binaryOpComparison"] += iterMultiplier;
-			instructionInfo["totalComparison"] += iterMultiplier;
-		}
-		else if(assignmentOperators.contains($binaryOp.operator)) {
-			instructionInfo["binaryOpAssignment"] += iterMultiplier;
-			instructionInfo["totalAssignment"] += iterMultiplier;
-		}
-		else if(bitwiseOperators.contains($binaryOp.operator)) {
-			instructionInfo["binaryOpBitwise"] += iterMultiplier;
-			instructionInfo["totalBitwise"] += iterMultiplier;
-		}
-		else if(bitwiseAssignmentOperators.contains($binaryOp.operator)) {
-			instructionInfo["binaryOpBitwiseAssignment"] += iterMultiplier;
-			instructionInfo["binaryOpBitwise"] += iterMultiplier;
-			instructionInfo["binaryOpAssignment"] += iterMultiplier;
-			instructionInfo["totalAssignment"] += iterMultiplier;
-			instructionInfo["totalBitwise"] += iterMultiplier;
-			instructionInfo["totalBitwiseAssignment"] += iterMultiplier;
-		}
-		else if(arithmeticAssignmentOperators.contains($binaryOp.operator)) {
-			instructionInfo["binaryOpArithmeticAssignment"] += iterMultiplier;
-			instructionInfo["binaryOpArithmetic"] += iterMultiplier;
-			instructionInfo["binaryOpAssignment"] += iterMultiplier;
-			instructionInfo["totalAssignment"] += iterMultiplier;
-			instructionInfo["totalArithmetic"] += iterMultiplier;
-			instructionInfo["totalArithmeticAssignment"] += iterMultiplier;
-		}
-		
-	}
-
-	for(var $unaryOp of $descendants["unaryOp"]) {
-		var iterMultiplier = getJpMultiplier($unaryOp, $mainLoop, loopIterInfo);
-	
-		if(arithmeticOperators.contains($unaryOp.operator)) {
-			instructionInfo["unaryOpArithmetic"] += iterMultiplier;
-			instructionInfo["totalArithmetic"] += iterMultiplier;
-		}
-		else if(logicOperators.contains($unaryOp.operator)) {
-			instructionInfo["unaryOpLogic"] += iterMultiplier;
-			instructionInfo["totalLogic"] += iterMultiplier;
-		}
-		else if(comparisonOperators.contains($unaryOp.operator)) {
-			instructionInfo["unaryOpComparison"] += iterMultiplier;
-			instructionInfo["totalComparison"] += iterMultiplier;
-		}
-		else if(assignmentOperators.contains($unaryOp.operator)) {
-			instructionInfo["unaryOpAssignment"] += iterMultiplier;
-			instructionInfo["totalAssignment"] += iterMultiplier;
-		}
-		else if(bitwiseOperators.contains($unaryOp.operator)) {
-			instructionInfo["unaryOpBitwise"] += iterMultiplier;
-			instructionInfo["totalBitwise"] += iterMultiplier;
-		}
-		else if(bitwiseAssignmentOperators.contains($unaryOp.operator)) {
-			instructionInfo["unaryOpBitwiseAssignment"] += iterMultiplier;
-			instructionInfo["unaryOpBitwise"] += iterMultiplier;
-			instructionInfo["unaryOpAssignment"] += iterMultiplier;
-			instructionInfo["totalAssignment"] += iterMultiplier;
-			instructionInfo["totalBitwise"] += iterMultiplier;
-			instructionInfo["totalBitwiseAssignment"] += iterMultiplier;
-		}
-		else if(arithmeticAssignmentOperators.contains($unaryOp.operator)) {
-			instructionInfo["unaryOpArithmeticAssignment"] += iterMultiplier;
-			instructionInfo["unaryOpArithmetic"] += iterMultiplier;
-			instructionInfo["unaryOpAssignment"] += iterMultiplier;
-			instructionInfo["totalAssignment"] += iterMultiplier;
-			instructionInfo["totalArithmetic"] += iterMultiplier;
-			instructionInfo["totalArithmeticAssignment"] += iterMultiplier;
-		}
-	}
-}
-
-function castAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo) {
-	for(var $cast of $descendants["cast"]) {
-		var iterMultiplier = getJpMultiplier($cast, $mainLoop, loopIterInfo);
-		instructionInfo["castExplicit"] += iterMultiplier;
-	}
-}
-
-function expressionAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo) {
-	for(var $expression of $descendants["expression"]) {
-		var iterMultiplier = getJpMultiplier($expression, $mainLoop, loopIterInfo);
-		if(typeof $expression.implicitCast !== "undefined")
-			instructionInfo["castImplicit"] += iterMultiplier;
-	}
-}
-
-function loopAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo) {
-	for(var $loop of $descendants["loop"]) {
-		var iterMultiplier = getJpMultiplier($loop, $mainLoop, loopIterInfo);
-		var kind = $loop.kind;
-		switch(kind) {
-			case "for":
-				instructionInfo["loopFor"] += iterMultiplier;
-				break;
-			case "while":
-				instructionInfo["loopWhile"] += iterMultiplier;
-				break;
-			case "dowhile":
-				instructionInfo["loopDoWhile"] += iterMultiplier;
-				break;
-			case "foreach":
-				instructionInfo["loopForEach"] += iterMultiplier;
-				break;
-		}
-	}
-}
-
-function memberAccessAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo) {
-	for(var $memberAccess of $descendants["memberAccess"]) {
-		var iterMultiplier = getJpMultiplier($memberAccess, $mainLoop, loopIterInfo);
-		var use = $memberAccess.use;
-		switch(use) {
-			case "read":
-				instructionInfo["memberAccessRead"] += iterMultiplier;
-				break;
-			case "write":
-				instructionInfo["memberAccessWrite"] += iterMultiplier;
-				break;
-			case "readwrite":
-				instructionInfo["memberAccessReadWrite"] += iterMultiplier;
-				break;
-		}
-	}
-}
-
-function vardeclAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo) {
-	for(var $vardecl of $descendants["vardecl"]) {
-		var iterMultiplier = getJpMultiplier($vardecl, $mainLoop, loopIterInfo);	
-		if($vardecl.hasInit)
-			instructionInfo["vardeclHasInit"] += iterMultiplier;
-	}
-}
-
-function varrefAnalyzer($descendants, $mainLoop, instructionInfo, loopIterInfo) {
-	for(var $varref of $descendants["varref"]) {
-		var iterMultiplier = getJpMultiplier($varref, $mainLoop, loopIterInfo);
-		var use = $varref.use;
-		switch(use) {
-			case "read":
-				instructionInfo["varrefRead"] += iterMultiplier;
-				break;
-			case "write":
-				instructionInfo["varrefWrite"] += iterMultiplier;
-				break;
-			case "readwrite":
-				instructionInfo["varrefReadWrite"] += iterMultiplier;
-				break;
-		}
-	}
-}*/
-
 
 function addResults(benchmarkResults, measures, executors, version, loopGroup, parLoops) {
 	var MPREFIX_LENGTH = 8;
@@ -554,15 +82,175 @@ function addResults(benchmarkResults, measures, executors, version, loopGroup, p
 	
 }
 
-function getSubFolders(params) {
+function getBenchmarks(params) {
+	var isBenchmarkSet = params["isBenchmarkSet"];
+	var sourceFolder = params["sourceFolder"];
+
+	if(!Io.isFolder(sourceFolder)) {
+		println(sourceFolder + " is not a valid source folder.");
+		exit(-1);
+	}
+
+	var benchmarks = []; 
+	if(isBenchmarkSet) {
+		benchmarks = searchSubFolders(params);
+	}
+	else {
+		benchmarks = searchProgramFiles(params);
+	}
+
+	return benchmarks;
+}
+
+function searchSubFolders(params) {
 	var sourceFolder = params["sourceFolder"];
 	var benchmarkFolders = params["benchmarkFolders"];
-	var allFolders = params["allFolders"];
 	var excludedFiles = params["excludedFiles"];
 	var excludedFolders = params["excludedFolders"];
 
-	if (benchmarkFolders.length == 1 && benchmarkFolders[0] == "all")
-		benchmarkFolders = allFolders;
+	var benchmarks = [];
+	if(benchmarkFolders.length == 0) {
+		return benchmarks;
+	}
+	
+	if (benchmarkFolders.length == 1 && benchmarkFolders[0] == "all") {
+		benchmarkFolders = [];
+		var allFolders = Io.getFolders(sourceFolder);
+		for (var folder of allFolders) {
+			if (!excludedFolders.contains(folder)) {
+				benchmarkFolders.push(folder);
+			}
+		}
+	}
+	else {
+		var newBenchmarkFolders = [];
+		for(folder of benchmarkFolders) {
+			newBenchmarkFolders.push(Io.getPath(sourceFolder + folder));
+		}
+		benchmarkFolders = newBenchmarkFolders;
+	}
+	
+	var foldersToCheck = Array.from(benchmarkFolders);
+	while(foldersToCheck.length > 0 ) {
+		var currentFolder = foldersToCheck.pop();
+
+		if (excludedFolders.contains(currentFolder)) {
+			continue;
+		}
+		
+		var childFolders = Io.getFolders(currentFolder);
+		if(childFolders.length > 0) {
+			foldersToCheck = foldersToCheck.concat(childFolders);
+			continue;
+		}
+
+		var fileExtensions = [".c", ".h", ".cpp", ".hpp"];
+		var childFiles = Io.getFiles(currentFolder);
+		var selectedFiles = [];
+		for(var childFile of childFiles) {
+			if (excludedFiles.contains(childFile)) {
+				continue;
+			}
+			
+			var lowerCaseFile = childFile.toString().toLowerCase();
+			for(var extension of fileExtensions) {
+				if(lowerCaseFile.endsWith(extension)) {
+					selectedFiles.push(childFile.toString());
+					break;
+				}
+			}
+		}
+		if(selectedFiles.length == 0) {
+			continue;
+		}
+
+		var folderString = currentFolder.toString();
+		var benchmarkObj = createBenchmarkObj(folderString, selectedFiles);
+		benchmarks.push(benchmarkObj);		
+	}
+
+	return benchmarks;
+}
+
+//TODO test this
+function searchProgramFiles(params) {
+	var sourceFolder = params["sourceFolder"];
+	//var benchmarkFolders = params["benchmarkFolders"];
+	var excludedFiles = params["excludedFiles"];
+	var excludedFolders = params["excludedFolders"];
+
+	var benchmarks = [];	
+	/*if(benchmarkFolders.length == 0) {
+		return benchmarks;
+	}*/
+	
+	benchmarkFolders = [];
+	var allFolders = Io.getFolders(sourceFolder);
+	for (var folder of allFolders) {
+		if (!excludedFolders.contains(folder)) {
+			benchmarkFolders.push(folder);
+		}
+	}
+
+	var selectedFiles = [];
+	var foldersToCheck = Array.from(benchmarkFolders);
+	while(foldersToCheck.length > 0 ) {
+		var currentFolder = foldersToCheck.pop();
+
+		if (excludedFolders.contains(currentFolder)) {
+			continue;
+		}
+		
+		var childFolders = Io.getFolders(currentFolder);
+		if(childFolders.length > 0) {
+			foldersToCheck = foldersToCheck.concat(childFolders);
+			continue;
+		}
+
+		var fileExtensions = [".c", ".h", ".cpp", ".hpp"];
+		var childFiles = Io.getFiles(currentFolder);
+		
+		for(var childFile of childFiles) {
+			if (excludedFiles.contains(childFile)) {
+				continue;
+			}
+			
+			var lowerCaseFile = childFile.toString().toLowerCase();
+			for(var extension of fileExtensions) {
+				if(lowerCaseFile.endsWith(extension)) {
+					selectedFiles.push(childFile.toString());
+					break;
+				}
+			}
+		}
+	}
+
+	if(selectedFiles.length != 0) {
+		var folderString = Io.getAbsolutePath(sourceFolder);
+		var benchmarkObj = createBenchmarkObj(folderString, selectedFiles);
+		benchmarks.push(benchmarkObj);
+	}
+
+	return benchmarks;
+}
+
+function _old_getSubFolders(params) {
+	var sourceFolder = params["sourceFolder"];
+	var benchmarkFolders = params["benchmarkFolders"];
+	var excludedFiles = params["excludedFiles"];
+	var excludedFolders = params["excludedFolders"];
+
+	if (benchmarkFolders.length == 1 && benchmarkFolders[0] == "all") {
+		benchmarkFolders = [];
+		var allFolders = Io.getFolders(sourceFolder);
+		for (var folder of allFolders) {
+			var relativePath = Io.getRelativePath(folder, sourceFolder);
+			
+			if (!excludedFolders.contains(relativePath)) {
+				benchmarkFolders.push(relativePath);
+			}
+		}
+	}
 
 	var benchmarks = [];
 	var foldersChecked = [];
@@ -616,15 +304,14 @@ function getSubFolders(params) {
 	return benchmarks;
 }
 
-function createBenchmarkObj(fileString) {
+function createBenchmarkObj(folderPath, files) {
 	var benchmark = new Object();
 
-	var lastSlash = fileString.lastIndexOf("/");
-	var benchGroupNameIndex = fileString.indexOf("/sources/") + 9;
-	benchmark.c = Io.getAbsolutePath(fileString);
-	benchmark.folder = Io.getAbsolutePath(fileString.slice(0, lastSlash));
-	benchmark.cacheFolder = Io.getAbsolutePath("./cache/" + fileString.slice(benchGroupNameIndex, lastSlash));
-	benchmark.outputFolder = Io.getAbsolutePath("./outputs/" + fileString.slice(benchGroupNameIndex, lastSlash));
+	var benchGroupNameIndex = folderPath.indexOf("/sources/") + 9;
+	benchmark.files = files;
+	benchmark.folder = folderPath;
+	benchmark.cacheFolder = Io.getAbsolutePath("./cache/" + folderPath.slice(benchGroupNameIndex));
+	benchmark.outputFolder = Io.getAbsolutePath("./outputs/" + folderPath.slice(benchGroupNameIndex));
 
 	var lastSlashFolder = benchmark.folder.lastIndexOf("/");
 	benchmark.name = benchmark.folder.substring(lastSlashFolder + 1);
@@ -632,6 +319,7 @@ function createBenchmarkObj(fileString) {
 	return benchmark;
 }
 
+//TODO test this (expected C)
 function rebuildCodeAst(params, xtraFiles, xtraIncludeFolders, readFromExpectedC) {
 	var benchmark = params["dynamic"]["benchmark"];
 	var preprocessorFlags = params["dynamic"]["preprocessorFlags"];
@@ -645,10 +333,12 @@ function rebuildCodeAst(params, xtraFiles, xtraIncludeFolders, readFromExpectedC
 	dataStore.setFlags(flagString);
 
 	var files = Array.from(xtraFiles);
-	files.push(benchmark.c);
 	if(readFromExpectedC) {
 		var expectedCPath = benchmark.folder + "/expected_output.c";
 		files.push(expectedCPath);
+	}
+	else {
+		files = files.concat(benchmark.files);
 	}
 	
 	for(var file of files) {
@@ -781,7 +471,7 @@ function getParLoopGroups(parLoops, loopGroupSizeLimit) {
 			var currentGroup = [];
 			currentGroup.push([loopId]);
 			processedIds.push(loopId);
-			parLoops[loopId]["isMainLoop"] = true;
+			parLoops[loopId]["features"]["static"]["isMainLoop"] = true;
 			
 			var $loopDescendants = $loop.descendants("loop");
 			for(var $descendant of $loopDescendants) {
@@ -834,32 +524,73 @@ function createParLoopObj() {
 	//standard info
 	parLoopObj["id"] = "";
 	parLoopObj["ompPragma"] = "";
-	parLoopObj["isMainLoop"] = false;
+	//parLoopObj["isMainLoop"] = false;
 	parLoopObj["parentLoopId"] = "";
 	parLoopObj["origLine"] = -1;
-	parLoopObj["nestedLevel"] = -1;
-	parLoopObj["isInnermost"] = false;
-	parLoopObj["isOutermost"] = false;
+	//parLoopObj["nestedLevel"] = -1;
+	//parLoopObj["isInnermost"] = false;
+	//parLoopObj["isOutermost"] = false;
 	parLoopObj["rank"] = [];
 	parLoopObj["index"] = -1;
 
 	//iteration info
-	parLoopObj["maxIterations"] = 0;
+	/*parLoopObj["maxIterations"] = 0;
 	parLoopObj["minIterations"] = 0;
 	parLoopObj["avgIterations"] = 0;
 	parLoopObj["stdDevIterations"] = 0;
 	parLoopObj["timesLoopIsCalled"] = 0;
 	parLoopObj["hasIterationVariation"] = false;
+	*/
 
 	//parent iteration info
-	parLoopObj["maxParentIterations"] = 0;
+	/*parLoopObj["maxParentIterations"] = 0;
 	parLoopObj["minParentIterations"] = 0;
 	parLoopObj["avgParentIterations"] = 0;
 	parLoopObj["stdDevParentIterations"] = 0;
 	parLoopObj["hasParentIterationVariation"] = false;
+	*/
 	
 	//instruction info
-	parLoopObj["instructionInfo"] = {};
+	//parLoopObj["instructionInfo"] = {};
+
+	//features
+	parLoopObj["features"] = {};
+
+	//static
+	parLoopObj["features"]["static"] = {};
+	parLoopObj["features"]["static"]["isMainLoop"] = false;
+	parLoopObj["features"]["static"]["nestedLevel"] = -1;
+	parLoopObj["features"]["static"]["isInnermost"] = false;
+	parLoopObj["features"]["static"]["isOutermost"] = false;
+
+	parLoopObj["features"]["static"]["omp_n_privates"] = 0;
+	parLoopObj["features"]["static"]["omp_n_first_privates"] = 0;
+	parLoopObj["features"]["static"]["omp_n_reductions"] = 0;
+	parLoopObj["features"]["static"]["omp_n_scalar_reductions"] = 0;
+	parLoopObj["features"]["static"]["omp_n_array_reductions"] = 0;
+	
+	parLoopObj["features"]["static"]["instructionInfo"] = {};
+
+
+	//dynamic
+	parLoopObj["features"]["dynamic"] = {};
+	
+	//iteration info
+	parLoopObj["features"]["dynamic"]["maxIterations"] = 0;
+	parLoopObj["features"]["dynamic"]["minIterations"] = 0;
+	parLoopObj["features"]["dynamic"]["avgIterations"] = 0;
+	parLoopObj["features"]["dynamic"]["stdDevIterations"] = 0;
+	parLoopObj["features"]["dynamic"]["timesLoopIsCalled"] = 0;
+	parLoopObj["features"]["dynamic"]["hasIterationVariation"] = false;
+	
+	//parent iteration info
+	parLoopObj["features"]["dynamic"]["maxParentIterations"] = 0;
+	parLoopObj["features"]["dynamic"]["minParentIterations"] = 0;
+	parLoopObj["features"]["dynamic"]["avgParentIterations"] = 0;
+	parLoopObj["features"]["dynamic"]["stdDevParentIterations"] = 0;
+	parLoopObj["features"]["dynamic"]["hasParentIterationVariation"] = false;
+	
+	parLoopObj["features"]["dynamic"]["instructionInfo"] = {};
 
 	return parLoopObj;
 }
@@ -882,9 +613,13 @@ function getParLoops(functionFilters) {
 			}
 			parLoop["id"] = loop.id;
 			parLoop["ompPragma"] = pragmas["parallelLoops"][loop.id];
-			parLoop["isMainLoop"] = false;
+			//parLoop["isMainLoop"] = false;
 			parLoop["parentLoopId"] = parentLoopId;
-			//parLoop["features"] = {};
+			/*parLoop["features"] = {
+				"static": {},
+				"dynamic": {}
+			};*/
+			getOmpPragmaFeatures(parLoop);
 			parLoops[loop.id] = parLoop;	
 
 		}
@@ -914,8 +649,13 @@ function getParLoopsFromExpectedOutput(params) {
 		}
 		parLoop["id"] = loopId;
 		parLoop["ompPragma"] = pragma.code;
-		parLoop["isMainLoop"] = false;
+		//parLoop["isMainLoop"] = false;
 		parLoop["parentLoopId"] = parentLoopId;
+		/*parLoop["features"] = {
+			"static": {},
+			"dynamic": {}
+		};*/
+		getOmpPragmaFeatures(parLoop);
 		parLoops[loopId] = parLoop;	
 	}
 	
@@ -924,7 +664,41 @@ function getParLoopsFromExpectedOutput(params) {
 }
 
 function getOmpPragmaFeatures(parLoop) {
-	return 0;
+	var pragma = parLoop["ompPragma"];
+	/*parLoop["features"]["static"]["omp_n_privates"] = 0;
+	parLoop["features"]["static"]["omp_n_first_privates"] = 0;
+	parLoop["features"]["static"]["omp_n_reductions"] = 0;
+	parLoop["features"]["static"]["omp_n_scalar_reductions"] = 0;
+	parLoop["features"]["static"]["omp_n_array_reductions"] = 0;
+	*/
+
+	var privateRegex =  /private([^)]+)/g;
+	var privateResult = pragma.match(privateRegex);
+	if (privateResult && privateResult.length > 0) {
+		var nPrivates = privateResult[0].split(",");
+		parLoop["features"]["static"]["omp_n_privates"] = nPrivates.length;
+	};
+
+	var firstPrivateRegex =  /firstprivate([^)]+)/g;
+	var firstPrivateResult = pragma.match(firstPrivateRegex);
+	if (firstPrivateResult && firstPrivateResult.length > 0) {
+		var nFirstPrivates = firstPrivateResult[0].split(",");
+		parLoop["features"]["static"]["omp_n_first_privates"] = nFirstPrivates.length;
+	};
+
+	var reductionRegex =  /reduction([^)]+)/g;
+	var reductionResult = pragma.match(reductionRegex);
+	if (reductionResult && reductionResult.length > 0) {
+		parLoop["features"]["static"]["omp_n_reductions"] = reductionResult.length;
+		for(var reduction of reductionResult) {
+			if(reduction.includes("[")) {
+				parLoop["features"]["static"]["omp_n_array_reductions"] += 1;
+			}
+			else {
+				parLoop["features"]["static"]["omp_n_scalar_reductions"] += 1;
+			}
+		}
+	};
 }
 
 function fixLoopId(loopId, benchmark) {
@@ -940,7 +714,7 @@ function fixLoopId(loopId, benchmark) {
 	return newLoopId;
 }
 
-function buildAndRun(params, version, nRuns, isPar) {
+function buildAndRun(params, version, nRuns, isPar, cleanBuild) {
 	var benchmark = params["dynamic"]["benchmark"];
 	var problemSizeFlag = params["dynamic"]["problemSizeFlag"];
 	var loopGroupSizeLimit = params["loopGroupSizeLimit"];
@@ -951,9 +725,16 @@ function buildAndRun(params, version, nRuns, isPar) {
 	}
 	else
 		subFolder = "/seq";
+
+	var folderPath = benchmark.outputFolder + problemSizeFlag + subFolder;
+	var buildFolderPath = folderPath + "/build";
 	
-	var folder = Io.mkdir(benchmark.outputFolder + problemSizeFlag + subFolder);
-	var buildFolder = Io.mkdir(benchmark.outputFolder + problemSizeFlag + subFolder + "/build");
+	var folder = Io.mkdir(folderPath);
+	var buildFolder = Io.mkdir(buildFolderPath);
+	
+	if(cleanBuild) {
+		Io.deleteFolderContents(buildFolder);
+	}
 	Clava.writeCode(folder);
 
 	var cmaker = new CMaker(benchmark.name);
@@ -969,11 +750,14 @@ function buildAndRun(params, version, nRuns, isPar) {
 		cmaker.addFlags("-fopenmp");
 
 	var exe = cmaker.build(folder, buildFolder);
-
 	var executors = [];
-	var i;
+
+	if(exe === undefined) {
+		println("Build failed");
+		return executors;
+	}
 	
-	for(i = 0; i < nRuns; i++) {
+	for(var i = 0; i < nRuns; i++) {
 		var executor = new ProcessExecutor();	
 		executor.setPrintToConsole(false);
 		executor.execute(exe.getAbsolutePath());
@@ -1004,7 +788,7 @@ function getMainLoopIds(parLoops) {
 	var mainLoopsIds = [];
 	var parLoopIds = Object.keys(parLoops);
 	for(var parLoopId of parLoopIds) {
-		if(parLoops[parLoopId]["isMainLoop"])
+		if(parLoops[parLoopId]["features"]["static"]["isMainLoop"])
 			mainLoopsIds.push(parLoopId);
 	}
 	
@@ -1166,7 +950,7 @@ function testPragmas(parLoops, params) {
 	var STRICTNESS_LOW = 1;
 	var STRICTNESS_HIGH = 2;
 
-	var test_strictness = params["clavaFlags"]["testPragmas"];
+	var test_strictness = params["autoParSelectorFlags"]["testPragmas"];
 
 	var removedPragmas = {};
 	if(test_strictness == NO_TESTING)
@@ -1189,16 +973,23 @@ function testPragmas(parLoops, params) {
 			$loops[loopId].insertAfter("exit(0);");
 		addPragmas([loopId], parLoops);
 
-		var executorPar = buildAndRun(params, "testPragmas", 1, true)[0];
-		var returnValue = executorPar.getReturnValue();
-
-		if(returnValue != 0) {
+		var executors = buildAndRun(params, "testPragmas", 1, true, true);
+		if(executors.length == 0) {
 			removedPragmas[loopId] = parLoops[loopId];
 			delete parLoops[loopId];
 			println(msg_prefix + " pragma failed. Removing it from parLoops.");
 		}
-		else
-			println(msg_prefix + " pragma passed sucessfully.");
+		else {
+			var executorPar = executors[0];
+			var returnValue = executorPar.getReturnValue();
+			if(returnValue != params["expectedReturnValue"]) {
+				removedPragmas[loopId] = parLoops[loopId];
+				delete parLoops[loopId];
+				println(msg_prefix + " pragma failed. Removing it from parLoops. Return value = " + returnValue);
+			}
+			else
+				println(msg_prefix + " pragma passed sucessfully. Return value = " + returnValue);
+		}
 
 		Clava.popAst();
 

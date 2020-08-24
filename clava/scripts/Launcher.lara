@@ -1,4 +1,5 @@
 import ProgramAnalyzer;
+import ModelTester;
 
 import clava.Clava;
 import lara.Io;
@@ -11,6 +12,11 @@ import weaver.WeaverJps;
 aspectdef Launcher
 
 	var mainParams = readParamsObj("mainParams");
+
+	if(mainParams["displayParamsHelp"]) {
+		displayParamsHelp();
+	}
+	
 	for(var paramToCreate of mainParams["paramsToCreate"]) {
 		if(paramToCreate == "mainParams") {
 			println("ERROR: " + paramToCreate + " is not a valid input for the field \"paramsToCreate\". Skipping this input.");
@@ -30,23 +36,33 @@ aspectdef Launcher
 		var now = new Date(Date.now());
 		call ProgramAnalyzer(loadedParams, now);
 	}
+
+	for(var resultToTest of mainParams["modelResultsToTest"]) {
+		if(resultToTest == "mainParams") {
+			println("ERROR: " + resultToTest + " is not a valid input for the field \"modelResultsToTest\". Skipping this input.");
+			continue;
+		}
+
+		var loadedResults = readParamsObj(resultToTest);
+		var now = new Date(Date.now());
+		call ModelTester(loadedResults, now);
+	}
 	
 end
-
 
 function createParamsObj(filename) {
 	var params = {};
 
 	params["benchGroupName"] = "";
-	params["sourceFolder"] = "";
-	params["benchmarkFolders"] = [];
 	params["nRuns"] = 0;
 	params["loopGroupSizeLimit"] = 0;
-	params["functionFilters"] = [];
+	params["sourceFolder"] = "";
+	params["isBenchmarkSet"] = true;
+	params["benchmarkFolders"] = [];
+	params["foldersToGetExpectedC"] = [];
 	params["problemSizeFlags"] = [];
 	params["defaultFlag"] = "";
-	params["allFolders"] = [];
-	params["foldersToGetExpectedC"] = [];
+	params["functionFilters"] = [];
 	params["excludedFiles"] = [];
 	params["excludedFolders"] = [];
 	params["xtraFiles"] = [];
@@ -54,13 +70,16 @@ function createParamsObj(filename) {
 	params["compilationFlags"] = [];
 	params["compilationLibs"] = [];
 	params["preprocessorFlags"] = [];
+	params["expectedReturnValue"] = 0;
 	
-	params["clavaFlags"] = {};
-	params["clavaFlags"]["testPragmas"] = 0;
-	params["clavaFlags"]["readCache"] = false;
-	params["clavaFlags"]["readFromExpectedOutput"] = false;
-	params["clavaFlags"]["onlyCalculateCaches"] = false;
-	params["clavaFlags"]["expressionBasedIterCounting"] = false;
+	params["autoParSelectorFlags"] = {};
+	params["autoParSelectorFlags"]["testPragmas"] = 0;
+	params["autoParSelectorFlags"]["readCache"] = false;
+	params["autoParSelectorFlags"]["readFromExpectedOutput"] = false;
+	params["autoParSelectorFlags"]["onlyCalculateCaches"] = false;
+	params["autoParSelectorFlags"]["expressionBasedIterCounting"] = false;
+	params["autoParSelectorFlags"]["cleanBuilds"] = false;
+	params["autoParSelectorFlags"]["extractDynamicFeatures"] = true;
 	
 
 	var path = "./params/" + filename + ".json";
@@ -72,4 +91,8 @@ function readParamsObj(filename) {
 	var paramsObj = Io.readJson(path);
 
 	return paramsObj;
+}
+
+function displayParamsHelp() {
+	println("PARAM FILES HELPER");
 }

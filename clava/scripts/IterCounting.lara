@@ -52,13 +52,13 @@ function countLoopIterations(parLoops, params, loopItersFiles) {
 
 	var loopIndexToId = [];
 	var loopIterInfo = {};
-	if(params["clavaFlags"]["expressionBasedIterCounting"])
+	if(params["autoParSelectorFlags"]["expressionBasedIterCounting"])
 		expressionBasedIterCounting(parLoops, loopIterInfo, loopIndexToId, $allLoops, nLoops);
 	else
 		realtimeIterCounting(parLoops, loopIterInfo, loopIndexToId, $allLoops, nLoops);
 	
 	
-	var executorPar = buildAndRun(params, "iterCounter", 1, true)[0];
+	var executorPar = buildAndRun(params, "iterCounter", 1, true, true)[0];
 	var consoleOutput = executorPar.getConsoleOutput();
 
 	getLoopIterationStats(loopIndexToId, consoleOutput, parLoops, loopIterInfo, nLoops);
@@ -284,22 +284,27 @@ function updateParLoopItersInfo(parLoops, loopIterInfo) {
 	var parLoopIds = Object.keys(parLoops);
 
 	for(var loopId of parLoopIds) {
-		parLoops[loopId]["maxIterations"] = loopIterInfo[loopId]["maxIterations"];
-		parLoops[loopId]["minIterations"] = loopIterInfo[loopId]["minIterations"];
-		parLoops[loopId]["avgIterations"] = loopIterInfo[loopId]["avgIterations"];
-		parLoops[loopId]["stdDevIterations"] = loopIterInfo[loopId]["stdDevIterations"];
-		parLoops[loopId]["hasIterationVariation"] = parLoops[loopId]["maxIterations"] != parLoops[loopId]["minIterations"];
-		parLoops[loopId]["timesLoopIsCalled"] = loopIterInfo[loopId]["totalCalls"];
+		parLoops[loopId]["features"]["dynamic"]["maxIterations"] = loopIterInfo[loopId]["maxIterations"];
+		parLoops[loopId]["features"]["dynamic"]["minIterations"] = loopIterInfo[loopId]["minIterations"];
+		parLoops[loopId]["features"]["dynamic"]["avgIterations"] = loopIterInfo[loopId]["avgIterations"];
+		parLoops[loopId]["features"]["dynamic"]["stdDevIterations"] = loopIterInfo[loopId]["stdDevIterations"];
+		parLoops[loopId]["features"]["dynamic"]["hasIterationVariation"] = parLoops[loopId]["features"]["dynamic"]["maxIterations"] != 
+			parLoops[loopId]["features"]["dynamic"]["minIterations"];
+		parLoops[loopId]["features"]["dynamic"]["timesLoopIsCalled"] = loopIterInfo[loopId]["totalCalls"];
 
 		var parentLoopId = parLoops[loopId]["parentLoopId"];
 		if(parentLoopId == "NULL")
 			continue;
 		
-		parLoops[loopId]["maxParentIterations"] = loopIterInfo[parentLoopId]["maxIterations"];
-		parLoops[loopId]["minParentIterations"] = loopIterInfo[parentLoopId]["minIterations"];
-		parLoops[loopId]["avgParentIterations"] = loopIterInfo[parentLoopId]["avgIterations"];
-		parLoops[loopId]["stdDevParentIterations"] = loopIterInfo[parentLoopId]["stdDevIterations"];	
-		parLoops[loopId]["hasParentIterationVariation"] = parLoops[loopId]["maxParentIterations"] != parLoops[loopId]["minParentIterations"];;
+		parLoops[loopId]["features"]["dynamic"]["maxParentIterations"] = loopIterInfo[parentLoopId]["maxIterations"];
+		parLoops[loopId]["features"]["dynamic"]["minParentIterations"] = loopIterInfo[parentLoopId]["minIterations"];
+		parLoops[loopId]["features"]["dynamic"]["avgParentIterations"] = loopIterInfo[parentLoopId]["avgIterations"];
+		parLoops[loopId]["features"]["dynamic"]["stdDevParentIterations"] = loopIterInfo[parentLoopId]["stdDevIterations"];	
+		parLoops[loopId]["features"]["dynamic"]["hasParentIterationVariation"] = parLoops[loopId]["features"]["dynamic"]["maxParentIterations"] != 
+			parLoops[loopId]["features"]["dynamic"]["minParentIterations"];
+
+		//does this work?
+		parLoops[loopId]["features"]["dynamic"]["timesParentLoopIsCalled"] = loopIterInfo[parentLoopId]["totalCalls"];
 	}
 }
 
