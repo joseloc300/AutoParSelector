@@ -28,7 +28,7 @@
 		"expected_output.c"
 	],
 	"excludedFolders": [
-		"test"
+		"./test/"
 	],
 	"xtraFiles": [],
 	"xtraIncludeFolders": [],

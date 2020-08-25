@@ -82,12 +82,12 @@ function createParamsObj(filename) {
 	params["autoParSelectorFlags"]["extractDynamicFeatures"] = true;
 	
 
-	var path = "./params/" + filename + ".json";
+	var path = "." + folderSeparator + "params" + folderSeparator + filename + ".json";
 	Io.writeJson(path, params);
 }
 
 function readParamsObj(filename) {
-	var path = "./params/" + filename + ".json";
+	var path = "." + folderSeparator + "params" + folderSeparator + filename + ".json";
 	var paramsObj = Io.readJson(path);
 
 	return paramsObj;

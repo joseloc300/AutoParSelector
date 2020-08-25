@@ -9,6 +9,8 @@ import lara.metrics.ExecutionTimeMetric;
 import weaver.Query;
 import lara.Strings;
 
+var folderSeparator = Io.getSeparator();
+
 function getLoopIndexes(loopGroup, parLoops) {
 	var indexes = [];
 	for(var loopId of loopGroup) {
@@ -106,7 +108,11 @@ function searchSubFolders(params) {
 	var sourceFolder = params["sourceFolder"];
 	var benchmarkFolders = params["benchmarkFolders"];
 	var excludedFiles = params["excludedFiles"];
-	var excludedFolders = params["excludedFolders"];
+	
+	var excludedFolders = [];
+	for(var excludedFolder of params["excludedFolders"]) {
+		excludedFolders.push(Io.getAbsolutePath(sourceFolder, excludedFolder));
+	}
 
 	var benchmarks = [];
 	if(benchmarkFolders.length == 0) {
@@ -116,16 +122,19 @@ function searchSubFolders(params) {
 	if (benchmarkFolders.length == 1 && benchmarkFolders[0] == "all") {
 		benchmarkFolders = [];
 		var allFolders = Io.getFolders(sourceFolder);
+		
 		for (var folder of allFolders) {
-			if (!excludedFolders.contains(folder)) {
-				benchmarkFolders.push(folder);
+			var absolutePathFolder = Io.getAbsolutePath(folder);
+			if(!excludedFolders.contains(absolutePathFolder)) {
+				benchmarkFolders.push(absolutePathFolder);
 			}
 		}
 	}
 	else {
 		var newBenchmarkFolders = [];
 		for(folder of benchmarkFolders) {
-			newBenchmarkFolders.push(Io.getPath(sourceFolder + folder));
+			//newBenchmarkFolders.push(Io.getPath(sourceFolder + folder));
+			newBenchmarkFolders.push(Io.getAbsolutePath(sourceFolder, folder));
 		}
 		benchmarkFolders = newBenchmarkFolders;
 	}
@@ -148,7 +157,15 @@ function searchSubFolders(params) {
 		var childFiles = Io.getFiles(currentFolder);
 		var selectedFiles = [];
 		for(var childFile of childFiles) {
-			if (excludedFiles.contains(childFile)) {
+			var isExcluded = false;
+			for(var excludedFile of excludedFiles) {
+				if (childFile.toString().endsWith(excludedFile)) {
+					isExcluded = true;
+					break;
+				}
+			}
+			
+			if(isExcluded) {
 				continue;
 			}
 			
@@ -177,7 +194,11 @@ function searchProgramFiles(params) {
 	var sourceFolder = params["sourceFolder"];
 	//var benchmarkFolders = params["benchmarkFolders"];
 	var excludedFiles = params["excludedFiles"];
-	var excludedFolders = params["excludedFolders"];
+	
+	var excludedFolders = [];
+	for(var excludedFolder of params["excludedFolders"]) {
+		excludedFolders.push(Io.getAbsolutePath(sourceFolder, excludedFolder));
+	}
 
 	var benchmarks = [];	
 	/*if(benchmarkFolders.length == 0) {
@@ -187,8 +208,9 @@ function searchProgramFiles(params) {
 	benchmarkFolders = [];
 	var allFolders = Io.getFolders(sourceFolder);
 	for (var folder of allFolders) {
-		if (!excludedFolders.contains(folder)) {
-			benchmarkFolders.push(folder);
+		var absolutePathFolder = Io.getAbsolutePath(folder);
+		if(!excludedFolders.contains(absolutePathFolder)) {
+			benchmarkFolders.push(absolutePathFolder);
 		}
 	}
 
@@ -211,7 +233,15 @@ function searchProgramFiles(params) {
 		var childFiles = Io.getFiles(currentFolder);
 		
 		for(var childFile of childFiles) {
-			if (excludedFiles.contains(childFile)) {
+			var isExcluded = false;
+			for(var excludedFile of excludedFiles) {
+				if (childFile.toString().endsWith(excludedFile)) {
+					isExcluded = true;
+					break;
+				}
+			}
+			
+			if(isExcluded) {
 				continue;
 			}
 			
@@ -234,86 +264,16 @@ function searchProgramFiles(params) {
 	return benchmarks;
 }
 
-function _old_getSubFolders(params) {
-	var sourceFolder = params["sourceFolder"];
-	var benchmarkFolders = params["benchmarkFolders"];
-	var excludedFiles = params["excludedFiles"];
-	var excludedFolders = params["excludedFolders"];
-
-	if (benchmarkFolders.length == 1 && benchmarkFolders[0] == "all") {
-		benchmarkFolders = [];
-		var allFolders = Io.getFolders(sourceFolder);
-		for (var folder of allFolders) {
-			var relativePath = Io.getRelativePath(folder, sourceFolder);
-			
-			if (!excludedFolders.contains(relativePath)) {
-				benchmarkFolders.push(relativePath);
-			}
-		}
-	}
-
-	var benchmarks = [];
-	var foldersChecked = [];
-
-	for (var folder of benchmarkFolders) {
-		var folderPath = sourceFolder + folder;
-		
-		if(!Io.isFolder(folderPath)) {
-			println(folderPath + " is not a valid folder.");
-			continue;
-		}
-
-		var folder = new LocalFolder(folderPath);
-		var fileList = folder.getFileList();
-
-		for (var file of fileList) {
-			var fileString = file.toString();
-			if(!fileString.endsWith(".c"))
-				continue;
-
-			var skipFile = false;
-			for(var excludedFile of excludedFiles) {
-				if(fileString.endsWith(excludedFile)) {
-					skipFile = true;
-					break;
-				}
-			}
-
-			if(skipFile)
-				continue;
-
-			var benchmark = createBenchmarkObj(fileString);
-
-			for(excludedFolder of excludedFolders) {
-				if(benchmark.folder.endsWith(excludedFolder))
-				skipFile = true;
-			}
-
-			if(skipFile)
-				continue;
-	
-			
-			if(foldersChecked.contains(benchmark.folder))
-				continue;
-
-			benchmarks.push(benchmark);
-			foldersChecked.push(benchmark.folder);
-
-		}
-	}
-	return benchmarks;
-}
-
 function createBenchmarkObj(folderPath, files) {
 	var benchmark = new Object();
 
-	var benchGroupNameIndex = folderPath.indexOf("/sources/") + 9;
+	var benchGroupNameIndex = folderPath.indexOf(folderSeparator + "sources" + folderSeparator) + 9;
 	benchmark.files = files;
 	benchmark.folder = folderPath;
-	benchmark.cacheFolder = Io.getAbsolutePath("./cache/" + folderPath.slice(benchGroupNameIndex));
-	benchmark.outputFolder = Io.getAbsolutePath("./outputs/" + folderPath.slice(benchGroupNameIndex));
+	benchmark.cacheFolder = Io.getAbsolutePath("." + folderSeparator + "cache" + folderSeparator + folderPath.slice(benchGroupNameIndex));
+	benchmark.outputFolder = Io.getAbsolutePath("." + folderSeparator + "outputs" + folderSeparator + folderPath.slice(benchGroupNameIndex));
 
-	var lastSlashFolder = benchmark.folder.lastIndexOf("/");
+	var lastSlashFolder = benchmark.folder.lastIndexOf(folderSeparator);
 	benchmark.name = benchmark.folder.substring(lastSlashFolder + 1);
 
 	return benchmark;
@@ -334,7 +294,7 @@ function rebuildCodeAst(params, xtraFiles, xtraIncludeFolders, readFromExpectedC
 
 	var files = Array.from(xtraFiles);
 	if(readFromExpectedC) {
-		var expectedCPath = benchmark.folder + "/expected_output.c";
+		var expectedCPath = benchmark.folder + folderSeparator + "expected_output.c";
 		files.push(expectedCPath);
 	}
 	else {
@@ -704,7 +664,7 @@ function getOmpPragmaFeatures(parLoop) {
 function fixLoopId(loopId, benchmark) {
 	var newLoopId = "";
 
-	var lastSlashIndex = benchmark.c.lastIndexOf("/");
+	var lastSlashIndex = benchmark.c.lastIndexOf(folderSeparator);
 	var filename = benchmark.c.substr(lastSlashIndex + 1);
 	var arrowIndex = loopId.indexOf("->");
 	var restOfId = loopId.substr(arrowIndex);
@@ -721,13 +681,13 @@ function buildAndRun(params, version, nRuns, isPar, cleanBuild) {
 
 	var subFolder = "";
 	if(isPar) {
-		subFolder = "/par/" + loopGroupSizeLimit + "/" + version;
+		subFolder = folderSeparator + "par"+ folderSeparator + loopGroupSizeLimit + folderSeparator + version;
 	}
 	else
-		subFolder = "/seq";
+		subFolder = folderSeparator + "seq";
 
 	var folderPath = benchmark.outputFolder + problemSizeFlag + subFolder;
-	var buildFolderPath = folderPath + "/build";
+	var buildFolderPath = folderPath + folderSeparator + "build";
 	
 	var folder = Io.mkdir(folderPath);
 	var buildFolder = Io.mkdir(buildFolderPath);
@@ -917,7 +877,7 @@ function getObjFromCache(params, objectName) {
 	var problemSizeFlag = params["dynamic"]["problemSizeFlag"];
 	var loopGroupSizeLimit = params["loopGroupSizeLimit"];
 
-	var path = benchmarkCacheFolder + problemSizeFlag + "/" + objectName + "-" + loopGroupSizeLimit + ".json";
+	var path = benchmarkCacheFolder + problemSizeFlag + folderSeparator + objectName + "-" + loopGroupSizeLimit + ".json";
 	var obj = Io.readJson(path);
 
 	return obj;
@@ -928,7 +888,7 @@ function writeObjToCache(params, objectName, obj) {
 	var problemSizeFlag = params["dynamic"]["problemSizeFlag"];
 	var loopGroupSizeLimit = params["loopGroupSizeLimit"];
 
-	var path = benchmarkCacheFolder + problemSizeFlag + "/" + objectName + "-" + loopGroupSizeLimit + ".json";
+	var path = benchmarkCacheFolder + problemSizeFlag + folderSeparator + objectName + "-" + loopGroupSizeLimit + ".json";
 	Io.writeJson(path, obj);
 }
 

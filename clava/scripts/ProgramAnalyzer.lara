@@ -29,9 +29,9 @@ aspectdef ProgramAnalyzer
 
 	var benchmarks = getBenchmarks(params);
 
-	var autoParLoopItersFolder = Io.getAbsolutePath("extraIncludes/");
-	var autoParLoopItersHPath = Io.getPath(autoParLoopItersFolder, "autopar_loop_iters.h");
-	var autoParLoopItersCPath = Io.getPath(autoParLoopItersFolder, "autopar_loop_iters.c");
+	var autoParLoopItersFolder = Io.getAbsolutePath("extraIncludes");
+	var autoParLoopItersHPath = Io.getAbsolutePath(autoParLoopItersFolder, "autopar_loop_iters.h"); //used to be path
+	var autoParLoopItersCPath = Io.getAbsolutePath(autoParLoopItersFolder, "autopar_loop_iters.c"); // used to be path
 
 	var loopItersFiles = {};
 	loopItersFiles["autoParLoopItersFolder"] = autoParLoopItersFolder;
@@ -159,7 +159,7 @@ aspectdef ProgramAnalyzer
 	var end_time = performance.now();
 	AnalyzerResults["totalExecutionTimeInSec"] = (end_time - start_time) / 1000;
 	
-	Io.writeJson("./results/" + params["benchGroupName"] + "_" + now.toISOString() + ".json", AnalyzerResults);
+	Io.writeJson("." + folderSeparator + "results" + folderSeparator + params["benchGroupName"] + "_" + now.toISOString() + ".json", AnalyzerResults);
 	println("Finished processing " + params["benchGroupName"]);
 
 end

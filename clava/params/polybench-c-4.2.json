@@ -23,14 +23,14 @@
 		"Nussinov.orig.c"
 	],
 	"excludedFolders": [
-		"utilities"
+		"./utilities/"
 	],
 	"xtraFiles": [
 		"./sources/polybench-c-4.2/utilities/polybench.c",
 		"./sources/polybench-c-4.2/utilities/polybench.h"
 	],
 	"xtraIncludeFolders": [
-		"./sources/polybench-c-4.2/utilities"
+		"./sources/polybench-c-4.2/utilities/"
 	],
 	"compilationFlags": [
 		"-O3",

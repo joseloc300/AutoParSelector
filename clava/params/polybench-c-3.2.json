@@ -21,14 +21,14 @@
 	"foldersToGetExpectedC": [],
 	"excludedFiles": [],
 	"excludedFolders": [
-		"fdtd-2d"
+		"./utilities/"
 	],
 	"xtraFiles": [
 		"./sources/polybench-c-3.2/utilities/polybench.c",
 		"./sources/polybench-c-3.2/utilities/polybench.h"
 	],
 	"xtraIncludeFolders": [
-		"./sources/polybench-c-3.2/utilities"
+		"./sources/polybench-c-3.2/utilities/"
 	],
 	"compilationFlags": [
 		"-O3",
