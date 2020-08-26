@@ -25,6 +25,7 @@ aspectdef Launcher
 
 		createParamsObj(paramToCreate);
 	}
+	println("Finished the param file creation step");
 
 	for(var paramToLoad of mainParams["paramsToLoad"]) {
 		if(paramToLoad == "mainParams") {
@@ -36,6 +37,7 @@ aspectdef Launcher
 		var now = new Date(Date.now());
 		call ProgramAnalyzer(loadedParams, now);
 	}
+	println("Finished the program analysis step");
 
 	for(var resultToTest of mainParams["modelResultsToTest"]) {
 		if(resultToTest == "mainParams") {
@@ -47,6 +49,8 @@ aspectdef Launcher
 		var now = new Date(Date.now());
 		call ModelTester(loadedResults, now);
 	}
+	println("Finished the model result tester step");
+	println("AutoParSelector script finished");
 	
 end
 
@@ -94,5 +98,61 @@ function readParamsObj(filename) {
 }
 
 function displayParamsHelp() {
-	println("PARAM FILES HELPER");
+	var helpMessage = "\nMAIN PARAM FILE HELPER\n\n" + 
+		"displayParamsHelp: boolean -> if true, displays the help messages for the param files.\n" + 
+		"paramsToCreate: string[] -> filenames(without extension) for new param files.\n" + 
+		"paramsToLoad: string[] -> filenames(without extension) of the param files to be used to run the program analyzer. They will be run in" + 
+			" the sequence provided.\n" + 
+		"modelResultsToTest: string[] -> filenames(without extension) of the result files to be used to test the performance of the models.\n\n";
+
+	var helpMessage2 = "\nPARAM FILES HELPER\n\n" + 
+		"- benchGroupName: string -> prefix for result filename.\n" + 
+		"- nRuns: int -> number of times each version will be timed.\n" + 
+		"- loopGroupSizeLimit: int -> number of pragmas allowed per loopGroup (if > 1, omp_set_nested(1) will be used).\n" + 
+		"- sourceFolder: string -> benchmarkSet/program root folder path relative to the folder where the script is called.\n" + 
+		"- isBenchmarkSet: boolean -> true if the source folder represents a benchmarkSet (each leaf folder contains a single benchmark" + 
+			" (supports multiple files per benchmark). false if the source folder represents a single program that can have files organized" + 
+			" in several folders.\n" + 
+		"- benchmarkFolders: string[] -> filter for folders to search for benchmarks/files. Search will only be conducted on the listed folders." + 
+			" Paths must be relative to the chosen source folder. If this param is [\"all\"] the script will automatically search all folders" + 
+			" inside the chosen source folder. Advised to use [\"all\"] unless only a subset of folders will be used.\n" + 
+		"- functionFilters: string[] -> only functions starting with one of the listed filters will be searched for loops.\n" + 
+		"- problemSizeFlags: string[] -> list of the problem size flags. Preprocessor directives must keep the \"-D\" prefix." + 
+			" If there are none keep this value unchanged.\n" + 
+		"- defaultFlag: string -> default problem size flag. If one of the problem size flags is set by default write it here with the \"-D\" prefix.\n" + 
+		"- foldersToGetExpectedC: string[] -> path to folders that will use the \"expected_output.c\" file. This file purpose is explained below in the" + 
+			" autoParSelectorFlags.readFromExpectedOutput param. This param only has effect if the previously mentioned param is toggled on.\n" + 
+		"- excludedFiles: string[] -> names of excluded files (with extension). Every file whose and extension matches one of the items of this list" + 
+			" will not be included in the compilation no matter the folder where they reside.\n" + 
+		"- excludedFolders: string[] -> paths of the excluded folders. The paths must be relative to the chosen source folder and none of files inside" + 
+			" them will be included in the compilation.\n" + 
+		"- xtraFiles: string[] -> paths of the extra files needed for compilation. The paths must be relative to the folder where the script is called.\n" + 
+		"- xtraIncludeFolders: string[] -> paths to the folders of files listed in the previous param. Paths must be relative to the folder where" + 
+			" the script is called.\n" + 
+		"- compilationFlags: string[] -> list of compilation flags to be used.\n" + 
+		"- compilationLibs: string[] -> libraries necessary for compilation. The \"-l\" is not necessary.\n" + 
+		"- preprocessorFlags: string[] -> preprocessor macros. The \"-D\" prefix is still necessary.\n" + 
+		"- expectedReturnValue: int -> value expected for the program/benchmark to return. Failing to return this value will be considered as an abnormal" +
+			" termination of the program.\n" +  
+		"- autoParSelectorFlags.testPragmas: int -> if 0, no testing is conducted. if 1, each pragma is tested one by one for a complete run of their" + 
+			" respective loopGroup. after this a exit instruction that is injected to force the program to close. if 2, the testing is more strict and" + 
+			" requires that the entire program/benchmark finishes. If there are problems with pragmas consider increasing this value (up to 2)." + 
+			" Testing with a value of 2 can be extremely slow so use it only when necessary.\n" + 
+		"- autoParSelectorFlags.readCache: boolean -> if true, the script will attempt to read values from caches instead of calculating them again" + 
+			" from scratch. Use this if you want to run the same tests multiple times to save time (Test must be run at least once to generate caches.\n" + 
+		"- autoParSelectorFlags.readFromExpectedOutput: boolean -> if true, the pragas will retrieved from a file named \"expected_output.c\" from" + 
+			" the chosen benchmark folders. In the benchmarks tested it was only used with NAS. It can be used with any benchmark/program if there is" + 
+			" a source file with the same name in the respective folder with all pragmas for all loops already applied. This feature is only supported" + 
+			"for single file benchmarks/programs. Reminder that if these files are present they should always be listed in the excludedFiles.\n" + 
+		"- autoParSelectorFlags.onlyCalculateCaches: boolean -> if true, the script will only calculate the appropriate values to store in cache and skip" + 
+			" the timing of the loops.\n" + 
+		"- autoParSelectorFlags.expressionBasedIterCounting: boolean -> if true, when counting loop iteration info, the script will rely on the loop" + 
+			" joinpoint attribute \"iterationsExpr\". It is advised to keep this on as it is considerably faster.\n" + 
+		"- autoParSelectorFlags.cleanBuilds: boolean -> if true, it forces a new build each time the script is run even if a previously built binary" + 
+			" is present. It is advised to keep this on.\n" + 
+		"- autoParSelectorFlags.extractDynamicFeatures: boolean -> if true, dynamic features will be extracted. This implies an extra step for counting" + 
+			" all loop's iterations.\n\n";
+	
+	println(helpMessage);
+	println(helpMessage2);
 }

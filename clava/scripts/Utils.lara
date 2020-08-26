@@ -550,6 +550,8 @@ function createParLoopObj() {
 	parLoopObj["features"]["dynamic"]["stdDevParentIterations"] = 0;
 	parLoopObj["features"]["dynamic"]["hasParentIterationVariation"] = false;
 	
+	parLoopObj["features"]["dynamic"]["timesParentLoopIsCalled"] = 0;
+	
 	parLoopObj["features"]["dynamic"]["instructionInfo"] = {};
 
 	return parLoopObj;
@@ -664,8 +666,8 @@ function getOmpPragmaFeatures(parLoop) {
 function fixLoopId(loopId, benchmark) {
 	var newLoopId = "";
 
-	var lastSlashIndex = benchmark.c.lastIndexOf(folderSeparator);
-	var filename = benchmark.c.substr(lastSlashIndex + 1);
+	var lastSlashIndex = benchmark.files[0].lastIndexOf(folderSeparator);
+	var filename = benchmark.files[0].substr(lastSlashIndex + 1);
 	var arrowIndex = loopId.indexOf("->");
 	var restOfId = loopId.substr(arrowIndex);
 
