@@ -38,7 +38,7 @@ aspectdef ProgramAnalyzer
 	loopItersFiles["autoParLoopItersHPath"] = autoParLoopItersHPath;
 	loopItersFiles["autoParLoopItersCPath"] = autoParLoopItersCPath;
 
-	var problemSizeFlags = params["problemSizeFlags"];
+	var problemSizeFlags = Array.from(params["problemSizeFlags"]);
 	if(problemSizeFlags.length == 0) {
 		problemSizeFlags = [""];
 	}

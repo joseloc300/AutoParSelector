@@ -2,7 +2,7 @@
     "displayParamsHelp": true,
     "paramsToCreate": [],
     "paramsToLoad": [
-        "NAS"
+        "polybench-c-3.2"
     ],
     "modelResultsToTest": []
 }

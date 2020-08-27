@@ -963,11 +963,11 @@ function testPragmas(parLoops, params) {
 	return removedPragmas;
 }
 
-function updateDynamicParams(params, benchmark, problemSizeFlag, loopGroupSizeLimit) {
+function updateDynamicParams(params, benchmark, problemSizeFlag) {
 	params["dynamic"] = {};
 	params["dynamic"]["benchmark"] = benchmark;
 	params["dynamic"]["problemSizeFlag"] = problemSizeFlag;
-	params["dynamic"]["preprocessorFlags"] = params["preprocessorFlags"];
+	params["dynamic"]["preprocessorFlags"] = Array.from(params["preprocessorFlags"]);
 	if(params["dynamic"]["problemSizeFlag"] != params["defaultFlag"]) {
 		params["dynamic"]["preprocessorFlags"].push(problemSizeFlag);
 	}

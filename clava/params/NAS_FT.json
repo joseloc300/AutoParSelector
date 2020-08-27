@@ -1,0 +1,53 @@
+{
+	"benchGroupName": "NAS",
+	"nRuns": 3,
+	"loopGroupSizeLimit": 1,
+	"sourceFolder": "./sources/NAS/",
+	"isBenchmarkSet": true,
+	"benchmarkFolders": [
+		"FT"
+	],
+	"functionFilters": [
+		""
+	],
+	"problemSizeFlags": [
+		"-DCLASS_S",
+		"-DCLASS_W",
+		"-DCLASS_A"
+	],
+	"defaultFlag": "-DCLASS_W",
+	"foldersToGetExpectedC": [
+		"BT",
+		"EP",
+		"FT",
+		"IS",
+		"LU",
+		"MG"
+	],
+	"excludedFiles": [
+		"expected_output.c"
+	],
+	"excludedFolders": [
+		"./test/"
+	],
+	"xtraFiles": [],
+	"xtraIncludeFolders": [],
+	"compilationFlags": [
+		"-O3",
+		"-mcmodel=medium"
+	],
+	"compilationLibs": [
+		"m"
+	],
+	"preprocessorFlags": [],
+	"expectedReturnValue": 0,
+	"autoParSelectorFlags": {
+		"testPragmas": 2,
+		"readCache": false,
+		"readFromExpectedOutput": true,
+		"onlyCalculateCaches": false,
+		"expressionBasedIterCounting": true,
+		"cleanBuilds": true,
+		"extractDynamicFeatures": true
+	}
+}
