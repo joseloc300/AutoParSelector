@@ -1,0 +1,9 @@
+{
+    "param_grid": [
+        {
+            "classification__probability": [true],
+            "classification__kernel": ["linear", "poly", "rbf", "sigmoid"],
+            "classification__degree": [4]
+        }
+    ]
+}

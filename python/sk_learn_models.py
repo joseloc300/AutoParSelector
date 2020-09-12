@@ -1,235 +1,353 @@
 import numpy as np
 import json
+from joblib import dump, load
+from os import mkdir, path
+
+from imblearn.over_sampling import SMOTE
+from imblearn.pipeline import Pipeline
 
 from sklearn.tree import DecisionTreeRegressor
 from sklearn import linear_model
-from sklearn.isotonic import IsotonicRegression
 from sklearn.svm import SVR
 from sklearn.neural_network import MLPRegressor
 
-from sklearn.model_selection import GridSearchCV
-from sklearn.model_selection import RandomizedSearchCV
+from sklearn import svm
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import classification_report
+
+from sklearn.model_selection import GridSearchCV, ParameterGrid
 
 from tensorflow.keras.utils import normalize
 
 
-def run_sk_models(x_train, x_test, y_train, y_test):
-    print("+ SKLearn Models")
-
-    main_models(x_train, x_test, y_train, y_test)
-
-
 # https://scikit-learn.org/stable/tutorial/machine_learning_map/index.html
-def main_models(x_train, x_test, y_train, y_test):
+def run_sk_regression(x_train, x_test, y_train, y_test, main_params, selected_feature_indices):
+    print("+ SKLearn Regression Models")
+
+    regression_params = main_params["create_models"]["regression"]
+    model_processing_params = create_model_processing_params(main_params["data_processing"], selected_feature_indices)
+
+    # simplest model, linear
+    if regression_params["ordinary_least_squares"]:
+        ordinary_least_squares(x_train, x_test, y_train, y_test, model_processing_params)
+
     # few features are important?
     # YES
-    lasso(x_train, x_test, y_train, y_test)
-    lasso_cv(x_train, x_test, y_train, y_test)
-
-    elastic_net(x_train, x_test, y_train, y_test)
+    if regression_params["lasso"]:
+        lasso(x_train, x_test, y_train, y_test, model_processing_params)
+    if regression_params["elastic_net"]:
+        elastic_net(x_train, x_test, y_train, y_test, model_processing_params)
 
     # NO
-    ridge_regression(x_train, x_test, y_train, y_test)
-    svr(x_train, x_test, y_train, y_test)
-
-    # last case scenario
-    ensemble_regressors(x_train, x_test, y_train, y_test)
+    if regression_params["svr"]:
+        svr(x_train, x_test, y_train, y_test, model_processing_params)
+    if regression_params["ridge_regression"]:
+        ridge_regression(x_train, x_test, y_train, y_test, model_processing_params)
 
     # was having good results
-    decision_tree_regressor(x_train, x_test, y_train, y_test)
+    if regression_params["decision_tree_regressor"]:
+        decision_tree_regressor(x_train, x_test, y_train, y_test, model_processing_params)
 
     # neural networks
-    neural_network_sklearn(x_train, x_test, y_train, y_test)
+    if regression_params["neural_network_sklearn"]:
+        neural_network_sklearn(x_train, x_test, y_train, y_test)
 
 
-def svr(x_train, x_test, y_train, y_test):
-    reg = SVR(kernel="linear")
-    reg.fit(x_train, y_train)
-
-    score = reg.score(x_test, y_test)
-
-    print("SVR linear")
-    print(score)
-
-    reg_2 = SVR(kernel="rbf")
-    reg_2.fit(x_train, y_train)
-
-    score_2 = reg_2.score(x_test, y_test)
-
-    print("SVR rbf")
-    print(score_2)
-
-
-def ensemble_regressors(x_train, x_test, y_train, y_test):
-    pass
-
-
-# 1
-def supervised_learning(x_train, x_test, y_train, y_test):
-    linear_models(x_train, x_test, y_train, y_test)
-    decision_tree_regressor(x_train, x_test, y_train, y_test)
-    # isotonic_regression()
-
-
-# 1.1
-def linear_models(x_train, x_test, y_train, y_test):
-    ordinary_least_squares(x_train, x_test, y_train, y_test)
-    ridge_regression(x_train, x_test, y_train, y_test)
-    lasso(x_train, x_test, y_train, y_test)
-    elastic_net(x_train, x_test, y_train, y_test)
-    lars(x_train, x_test, y_train, y_test)
-
-
-# 1.1.1
-def ordinary_least_squares(x_train, x_test, y_train, y_test):
+def ordinary_least_squares(x_train, x_test, y_train, y_test, model_processing_params):
     reg = linear_model.LinearRegression()
     reg.fit(x_train, y_train)
 
-    score = reg.score(x_test, y_test)
+    r2_score = reg.score(x_test, y_test)
 
-    print("Ordinary Least Squares")
-    print(score)
+    print("\nOrdinary Least Squares")
+    print("R2 Score: " + str(r2_score))
 
+    if not path.exists("./models/regression/ordinary_least_squares"):
+        mkdir("./models/regression/ordinary_least_squares")
+    dump(reg, "./models/regression/ordinary_least_squares/model.dump")
 
-# 1.1.2
-def ridge_regression(x_train, x_test, y_train, y_test):
-    reg = linear_model.Ridge(max_iter=10000, tol=0.0001)
-    reg.fit(x_train, y_train)
-    score = reg.score(x_test, y_test)
+    model_stats = {
+        "r2_score": r2_score
+    }
 
-    print("Ridge Regression")
-    print(score)
+    with open("./models/regression/ordinary_least_squares/model_stats.json", "w") as outfile:
+        json.dump(model_stats, outfile, indent=4)
 
-    reg_2 = linear_model.RidgeCV(alphas=np.arange(0.01, 1.0, 0.01), cv=5)
-    reg_2.fit(x_train, y_train)
-    score_2 = reg_2.score(x_test, y_test)
-
-    print("Ridge Regression CV")
-    print(score_2)
+    with open("./models/regression/ordinary_least_squares/model_processing_params.json", "w") as outfile:
+        json.dump(model_processing_params, outfile, indent=4)
 
 
-# 1.1.3
-def lasso(x_train, x_test, y_train, y_test):
-    with open("./tuning/lasso.json") as lasso_params_file:
+def lasso(x_train, x_test, y_train, y_test, model_processing_params):
+    with open("tuning/regression/lasso.json") as lasso_params_file:
         file_data = json.load(lasso_params_file)
 
     param_grid = file_data["param_grid"]
 
     lasso_instance = linear_model.Lasso()
 
-    gscv = GridSearchCV(lasso_instance, param_grid)
-    gscv.fit(x_train, y_train)
+    best_score = 0
+    best_params = None
+    first_iter = True
 
-    score_gscv = gscv.score(x_test, y_test)
-    print(score_gscv)
+    for g in ParameterGrid(param_grid):
+        lasso_instance.set_params(**g)
+        lasso_instance.fit(x_train, y_train)
+
+        new_score = lasso_instance.score(x_test, y_test)
+
+        # save if best
+        if first_iter:
+            best_score = new_score
+            best_params = g
+            first_iter = False
+        elif new_score > best_score:
+            best_score = new_score
+            best_params = g
+
+    all_x = np.vstack((x_train, x_test))
+    all_y = np.append(y_train, y_test)
+    r2_score = lasso_instance.score(all_x, all_y)
+
+    print("\nLasso")
+    print("R2 score: " + str(r2_score))
+    print("Best Score:" + str(best_score))
+    print("Best params:")
+    print(best_params)
+
+    if not path.exists("./models/regression/lasso"):
+        mkdir("./models/regression/lasso")
+    dump(lasso_instance, "./models/regression/lasso/model.dump")
+
+    model_stats = {
+        "r2_score": r2_score,
+        "best_score": best_score,
+        "best_params": best_params
+    }
+
+    with open("./models/regression/lasso/model_stats.json", "w") as outfile:
+        json.dump(model_stats, outfile, indent=4)
+
+    with open("./models/regression/lasso/model_processing_params.json", "w") as outfile:
+        json.dump(model_processing_params, outfile, indent=4)
 
 
-    # reg = linear_model.Lasso(alpha=1.0, max_iter=1000000, tol=0.5)
-    # reg.fit(x_train, y_train)
-    #
-    # score = reg.score(x_test, y_test)
-    #
-    # print("Lasso")
-    # print(score)
-    #
-    # reg_2 = linear_model.LassoCV(tol=0.75, cv=5)
-    # reg_2.fit(x_train, y_train)
-    #
-    # score_2 = reg_2.score(x_test, y_test)
-    #
-    # print("Lasso CV")
-    # print(score_2)
-
-
-def lasso_cv(x_train, x_test, y_train, y_test):
-    with open("./tuning/lasso_cv.json") as lasso_cv_params_file:
-        file_data = json.load(lasso_cv_params_file)
+def elastic_net(x_train, x_test, y_train, y_test, model_processing_params):
+    with open("tuning/regression/elastic_net.json") as elastic_net_params_file:
+        file_data = json.load(elastic_net_params_file)
 
     param_grid = file_data["param_grid"]
 
-    lasso_cv_instance = linear_model.LassoCV()
+    elastic_net_instance = linear_model.ElasticNet()
 
-    rscv = RandomizedSearchCV(lasso_cv_instance, param_grid, n_iter=20)
-    rscv.fit(x_train, y_train)
+    best_score = 0
+    best_params = None
+    first_iter = True
 
-    score_gscv = rscv.score(x_test, y_test)
-    print(score_gscv)
+    for g in ParameterGrid(param_grid):
+        elastic_net_instance.set_params(**g)
+        elastic_net_instance.fit(x_train, y_train)
 
-# 1.1.5
-def elastic_net(x_train, x_test, y_train, y_test):
-    reg = linear_model.ElasticNet(alpha=1.0, l1_ratio=0.5, tol=0.5)
-    reg.fit(x_train, y_train)
+        new_score = elastic_net_instance.score(x_test, y_test)
 
-    score = reg.score(x_test, y_test)
+        # save if best
+        if first_iter:
+            best_score = new_score
+            best_params = g
+            first_iter = False
+        elif new_score > best_score:
+            best_score = new_score
+            best_params = g
 
-    print("Elastic Net")
-    print(score)
+    all_x = np.vstack((x_train, x_test))
+    all_y = np.append(y_train, y_test)
+    r2_score = elastic_net_instance.score(all_x, all_y)
 
-    reg_2 = linear_model.ElasticNetCV(l1_ratio=0.5, tol=0.5, cv=5)
-    reg_2.fit(x_train, y_train)
+    print("\nElastic Net")
+    print("R2 score: " + str(r2_score))
+    print("Best Score:" + str(best_score))
+    print("Best params:")
+    print(best_params)
 
-    score_2 = reg_2.score(x_test, y_test)
+    if not path.exists("./models/regression/elastic_net"):
+        mkdir("./models/regression/elastic_net")
+    dump(elastic_net_instance, "./models/regression/elastic_net/model.dump")
 
-    print("Elastic Net CV")
-    print(score_2)
+    model_stats = {
+        "r2_score": r2_score,
+        "best_score": best_score,
+        "best_params": best_params
+    }
 
+    with open("./models/regression/elastic_net/model_stats.json", "w") as outfile:
+        json.dump(model_stats, outfile, indent=4)
 
-# 1.1.7
-def lars(x_train, x_test, y_train, y_test):
-    reg = linear_model.Lars()
-    reg.fit(x_train, y_train)
-
-    score = reg.score(x_test, y_test)
-
-    print("Lars")
-    print(score)
-
-    reg_2 = linear_model.LarsCV(max_iter=500, cv=None)
-    reg_2.fit(x_train, y_train)
-
-    score_2 = reg_2.score(x_test, y_test)
-
-    print("Lars CV")
-    print(score_2)
-
-
-# 1.10.2
-def decision_tree_regressor(x_train, x_test, y_train, y_test):
-    reg_1 = DecisionTreeRegressor(max_depth=5, min_samples_leaf=10)
-    reg_2 = DecisionTreeRegressor(max_depth=10, min_samples_leaf=4)
-    reg_3 = DecisionTreeRegressor()
-
-    reg_1.fit(x_train, y_train)
-    reg_2.fit(x_train, y_train)
-    reg_3.fit(x_train, y_train)
-
-    score_1 = reg_1.score(x_test, y_test)
-    score_2 = reg_2.score(x_test, y_test)
-    score_3 = reg_3.score(x_test, y_test)
-
-    print("Decision Tree Regressor")
-    print(score_1)
-    print(score_2)
-    print(score_3)
+    with open("./models/regression/elastic_net/model_processing_params.json", "w") as outfile:
+        json.dump(model_processing_params, outfile, indent=4)
 
 
-# 1.15
-def isotonic_regression(x_train, x_test, y_train, y_test):
-    reg = IsotonicRegression()
-    # reg.fit(x_train, y_train)
-    x_new = reg.fit_transform(x_train, y_train)
+def svr(x_train, x_test, y_train, y_test, model_processing_params):
+    with open("tuning/regression/svr.json") as svr_params_file:
+        file_data = json.load(svr_params_file)
 
-    score = reg.score(x_test, y_test)
+    param_grid = file_data["param_grid"]
 
-    print("Isotonic Regression")
-    print(score)
+    svr_instance = SVR()
+
+    best_score = 0
+    best_params = None
+    first_iter = True
+
+    for g in ParameterGrid(param_grid):
+        svr_instance.set_params(**g)
+        svr_instance.fit(x_train, y_train)
+
+        new_score = svr_instance.score(x_test, y_test)
+
+        # save if best
+        if first_iter:
+            best_score = new_score
+            best_params = g
+            first_iter = False
+        elif new_score > best_score:
+            best_score = new_score
+            best_params = g
+
+    all_x = np.vstack((x_train, x_test))
+    all_y = np.append(y_train, y_test)
+    r2_score = svr_instance.score(all_x, all_y)
+
+    print("\nSVR")
+    print("R2 score: " + str(r2_score))
+    print("Best Score:" + str(best_score))
+    print("Best params:")
+    print(best_params)
+
+    if not path.exists("./models/regression/svr"):
+        mkdir("./models/regression/svr")
+    dump(svr_instance, "./models/regression/svr/model.dump")
+
+    model_stats = {
+        "r2_score": r2_score,
+        "best_score": best_score,
+        "best_params": best_params
+    }
+
+    with open("./models/regression/svr/model_stats.json", "w") as outfile:
+        json.dump(model_stats, outfile, indent=4)
+
+    with open("./models/regression/svr/model_processing_params.json", "w") as outfile:
+        json.dump(model_processing_params, outfile, indent=4)
 
 
-# 2
-def unsupervised_learning(x_train, x_test, y_train, y_test):
-    pass
+def ridge_regression(x_train, x_test, y_train, y_test, model_processing_params):
+    with open("tuning/regression/ridge_regression.json") as ridge_regression_params_file:
+        file_data = json.load(ridge_regression_params_file)
+
+    param_grid = file_data["param_grid"]
+
+    ridge_regression_instance = linear_model.Ridge()
+
+    best_score = 0
+    best_params = None
+    first_iter = True
+
+    for g in ParameterGrid(param_grid):
+        ridge_regression_instance.set_params(**g)
+        ridge_regression_instance.fit(x_train, y_train)
+
+        new_score = ridge_regression_instance.score(x_test, y_test)
+
+        # save if best
+        if first_iter:
+            best_score = new_score
+            best_params = g
+            first_iter = False
+        elif new_score > best_score:
+            best_score = new_score
+            best_params = g
+
+    all_x = np.vstack((x_train, x_test))
+    all_y = np.append(y_train, y_test)
+    r2_score = ridge_regression_instance.score(all_x, all_y)
+
+    print("\nRidge Regression")
+    print("R2 score: " + str(r2_score))
+    print("Best Score:" + str(best_score))
+    print("Best params:")
+    print(best_params)
+
+    if not path.exists("./models/regression/ridge_regression"):
+        mkdir("./models/regression/ridge_regression")
+    dump(ridge_regression_instance, "./models/regression/ridge_regression/model.dump")
+
+    model_stats = {
+        "r2_score": r2_score,
+        "best_score": best_score,
+        "best_params": best_params
+    }
+
+    with open("./models/regression/ridge_regression/model_stats.json", "w") as outfile:
+        json.dump(model_stats, outfile, indent=4)
+
+    with open("./models/regression/ridge_regression/model_processing_params.json", "w") as outfile:
+        json.dump(model_processing_params, outfile, indent=4)
 
 
+def decision_tree_regressor(x_train, x_test, y_train, y_test, model_processing_params):
+    with open("tuning/regression/decision_tree_regressor.json") as decision_tree_regression_params_file:
+        file_data = json.load(decision_tree_regression_params_file)
+
+    param_grid = file_data["param_grid"]
+
+    decision_tree_regression_instance = DecisionTreeRegressor()
+
+    best_score = 0
+    best_params = None
+    first_iter = True
+
+    for g in ParameterGrid(param_grid):
+        decision_tree_regression_instance.set_params(**g)
+        decision_tree_regression_instance.fit(x_train, y_train)
+
+        new_score = decision_tree_regression_instance.score(x_test, y_test)
+
+        # save if best
+        if first_iter:
+            best_score = new_score
+            best_params = g
+            first_iter = False
+        elif new_score > best_score:
+            best_score = new_score
+            best_params = g
+
+    all_x = np.vstack((x_train, x_test))
+    all_y = np.append(y_train, y_test)
+    r2_score = decision_tree_regression_instance.score(all_x, all_y)
+
+    print("\nDecision Tree Regressor")
+    print("R2 score: " + str(r2_score))
+    print("Best Score:" + str(best_score))
+    print("Best params:")
+    print(best_params)
+
+    if not path.exists("./models/regression/decision_tree_regressor"):
+        mkdir("./models/regression/decision_tree_regressor")
+    dump(decision_tree_regression_instance, "./models/regression/decision_tree_regressor/model.dump")
+
+    model_stats = {
+        "r2_score": r2_score,
+        "best_score": best_score,
+        "best_params": best_params
+    }
+
+    with open("./models/regression/decision_tree_regressor/model_stats.json", "w") as outfile:
+        json.dump(model_stats, outfile, indent=4)
+
+    with open("./models/regression/decision_tree_regressor/model_processing_params.json", "w") as outfile:
+        json.dump(model_processing_params, outfile, indent=4)
+
+
+# TODO not up to date. lacking parameterGrid support and model, stats, and params output to files.
 def neural_network_sklearn(x_train, x_test, y_train, y_test):
     tf_x_train = np.asarray(x_train[:])
     tf_y_train = np.asarray(y_train[:])
@@ -245,3 +363,149 @@ def neural_network_sklearn(x_train, x_test, y_train, y_test):
     score = regr.score(tf_x_test, tf_y_test)
     print("Neural Network Sklearn")
     print(score)
+
+
+# https://scikit-learn.org/stable/tutorial/machine_learning_map/index.html
+def run_sk_classification(loop_features, loop_targets, main_params, selected_feature_indices):
+    print("+ SKLearn Classification Models")
+
+    classification_params = main_params["create_models"]["classification"]
+    model_processing_params = create_model_processing_params(main_params["data_processing"], selected_feature_indices)
+
+    if classification_params["svc"]:
+        svc(loop_features, loop_targets, model_processing_params)
+    if classification_params["kn_classifier"]:
+        kn_classifier(loop_features, loop_targets, model_processing_params)
+
+
+def svc(loop_features, loop_targets, model_processing_params):
+    print("\nSVC classifier")
+
+    with open("tuning/classification/svc.json") as svc_params_file:
+        file_data = json.load(svc_params_file)
+
+    param_grid = file_data["param_grid"]
+
+    model = Pipeline([
+        ('sampling', SMOTE()),
+        ('classification', svm.SVC())
+    ])
+
+    gscv = GridSearchCV(model, param_grid, scoring="roc_auc")
+    gscv.fit(loop_features, loop_targets)
+
+    if not path.exists("./models/classification/svc"):
+        mkdir("./models/classification/svc")
+    dump(gscv, "./models/classification/svc/model.dump")
+
+    score_gscv = gscv.score(loop_features, loop_targets)
+    print("ROC AUC: " + str(score_gscv))
+    print("Best score: " + str(gscv.best_score_))
+    print("Best params:")
+    print(gscv.best_params_)
+
+    y_test_pred = gscv.predict(loop_features)
+
+    print("Classification report:")
+    print(classification_report(loop_targets, y_test_pred))
+
+    model_stats = {
+        "roc_auc": score_gscv,
+        "best_score": gscv.best_score_,
+        "best_params": gscv.best_params_,
+        "classification_report": classification_report(loop_targets, y_test_pred, output_dict=True)
+    }
+
+    with open("./models/classification/svc/model_stats.json", "w") as outfile:
+        json.dump(model_stats, outfile, indent=4)
+
+    with open("./models/classification/svc/model_processing_params.json", "w") as outfile:
+        json.dump(model_processing_params, outfile, indent=4)
+
+
+def kn_classifier(loop_features, loop_targets, model_processing_params):
+    print("\nkN classifier")
+
+    with open("tuning/classification/kn_classifier.json") as kn_classifier_params_file:
+        file_data = json.load(kn_classifier_params_file)
+
+    param_grid = file_data["param_grid"]
+
+    model = Pipeline([
+        ('sampling', SMOTE()),
+        ('classification', KNeighborsClassifier())
+    ])
+
+    gscv = GridSearchCV(model, param_grid, scoring="roc_auc")
+    gscv.fit(loop_features, loop_targets)
+
+    if not path.exists("./models/classification/kn_classifier"):
+        mkdir("./models/classification/kn_classifier")
+    dump(gscv, "./models/classification/kn_classifier/model.dump")
+
+    score_gscv = gscv.score(loop_features, loop_targets)
+    print("ROC AUC: " + str(score_gscv))
+    print("Best score: " + str(gscv.best_score_))
+    print("Best params:")
+    print(gscv.best_params_)
+
+    y_test_pred = gscv.predict(loop_features)
+
+    print("Classification report:")
+    print(classification_report(loop_targets, y_test_pred))
+
+    model_stats = {
+        "roc_auc": score_gscv,
+        "best_score": gscv.best_score_,
+        "best_params": gscv.best_params_,
+        "classification_report": classification_report(loop_targets, y_test_pred, output_dict=True)
+    }
+
+    with open("./models/classification/kn_classifier/model_stats.json", "w") as outfile:
+        json.dump(model_stats, outfile, indent=4)
+
+    with open("./models/classification/kn_classifier/model_processing_params.json", "w") as outfile:
+        json.dump(model_processing_params, outfile, indent=4)
+
+
+def make_predictions(loop_features, loop_targets, loop_targets_orig, prediction_params, loop_info):
+    print("\n+ Make predictions")
+    model = load(prediction_params["model_folder_path"] + "/model.dump")
+    y_pred = model.predict(loop_features)
+    np_loop_info = np.array(loop_info)
+    model_predictions = {
+        "modelName": prediction_params["model_name"],
+        "modelClassification": prediction_params["is_classification"],
+        "targetIds": (np_loop_info[:, 0]).tolist(),
+        "targetProblemSizeFlags": (np_loop_info[:, 2]).tolist(),
+        "targetOmpPragmas": (np_loop_info[:, 1]).tolist(),
+        "targetPredictions": y_pred.tolist(),
+        "targetValuesPostProcess": loop_targets,
+        "targetValuesOrig": loop_targets_orig,
+        "classification_stats": [],
+        "r2_score": []
+    }
+
+    if len(loop_targets) > 0:
+        if prediction_params["is_classification"]:
+            model_predictions["classification_stats"] = {
+                "roc_auc": model.score(loop_features, loop_targets),
+                "classification_report": classification_report(loop_targets, y_pred, output_dict=True)
+            }
+        else:
+            model_predictions["r2_score"] = model.score(loop_features, loop_targets)
+
+    with open("./predictions/" + prediction_params["model_name"] + ".json", "w") as outfile:
+        json.dump(model_predictions, outfile, indent=4)
+
+
+def create_model_processing_params(processing_params, selected_features_indices):
+    model_processing_params = {
+        "threshold_target": processing_params["threshold_target"],
+        "handle_invalid_inputs": processing_params["handle_invalid_inputs"],
+        "scale_data_algorithm": processing_params["scale_data_algorithm"],
+        "feature_selection_params": processing_params["feature_selection_params"],
+        "selected_features_indices": selected_features_indices
+    }
+
+    return model_processing_params

@@ -1,0 +1,9 @@
+{
+    "param_grid": [
+        {
+            "classification__n_neighbors": [3, 5, 7, 10],
+            "classification__weights": ["uniform", "distance"],
+            "classification__leaf_size": [10, 20, 30, 40, 50]
+        }
+    ]
+}

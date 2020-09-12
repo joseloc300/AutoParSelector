@@ -3,9 +3,7 @@ import math
 import numpy as np
 
 
-def stratified_regressions_sampling(loop_features, loop_targets, origin_files, sampling_params):
-    train_prefixes = sampling_params["train_prefixes"]
-    test_prefixes = sampling_params["test_prefixes"]
+def stratified_regressions_sampling(loop_features, loop_targets, sampling_params):
     train_ratio = sampling_params["train_ratio"]
     block_size = sampling_params["block_size"]
     stratify = sampling_params["stratify"]
@@ -13,49 +11,13 @@ def stratified_regressions_sampling(loop_features, loop_targets, origin_files, s
     r_seed = sampling_params["r_seed"]
     r_shuffles = sampling_params["r_shuffles"]
 
-    # new_loop_features = np.asarray(loop_features[:])
-    # new_loop_targets = np.asarray(loop_targets[:])
+    new_loop_features = np.asarray(loop_features[:])
+    new_loop_targets = np.asarray(loop_targets[:])
 
     new_x_train = np.zeros((0, len(loop_features[0])))
     new_y_train = np.zeros(0)
     new_x_test = np.zeros((0, len(loop_features[0])))
     new_y_test = np.zeros(0)
-
-    new_loop_features = np.zeros((0, len(loop_features[0])))
-    new_loop_targets = np.zeros(0)
-
-    for i in range(len(origin_files)):
-        train_file = False
-        test_file = False
-        if len(train_prefixes) == 0:
-            train_file = True
-        else:
-            for train_prefix in train_prefixes:
-                if origin_files[i].startswith(train_prefix.lower()):
-                    train_file = True
-                    break
-
-        if len(test_prefixes) == 0:
-            test_file = True
-        else:
-            for test_prefix in test_prefixes:
-                if origin_files[i].startswith(test_prefix.lower()):
-                    test_file = True
-                    break
-
-        if train_file and not test_file:
-            new_x_train = np.append(new_x_train, [loop_features[i]], axis=0)
-            new_y_train = np.append(new_y_train, loop_targets[i])
-        elif test_file and not train_file:
-            new_x_test = np.append(new_x_test, [loop_features[i]], axis=0)
-            new_y_test = np.append(new_y_test, loop_targets[i])
-        elif train_file and test_file:
-            new_loop_features = np.append(new_loop_features, [loop_features[i]], axis=0)
-            new_loop_targets = np.append(new_loop_targets, loop_targets[i])
-
-    print(len(new_x_train))
-    print(len(new_x_test))
-    print(len(new_loop_features))
 
     ARRAY_SIZE = len(new_loop_targets)
     N_BLOCKS = math.ceil(ARRAY_SIZE / block_size)

@@ -1,0 +1,8 @@
+{
+    "param_grid": [
+        {
+            "max_iter": [50000],
+            "learning_rate": ["adaptive"]
+        }
+    ]
+}
