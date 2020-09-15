@@ -39,7 +39,7 @@ aspectdef Launcher
 	}
 	println("Finished the program analysis step");
 
-	for(var resultToTest of mainParams["modelResultsToTest"]) {
+	for(var resultToTest of mainParams["modelResultsToTest"]["source_params"]) {
 		if(resultToTest == "mainParams") {
 			println("ERROR: " + resultToTest + " is not a valid input for the field \"modelResultsToTest\". Skipping this input.");
 			continue;
@@ -47,7 +47,7 @@ aspectdef Launcher
 
 		var loadedResults = readParamsObj(resultToTest);
 		var now = new Date(Date.now());
-		call ModelTester(loadedResults, now);
+		call ModelTester(loadedResults, mainParams["modelResultsToTest"]["results_file"], now);
 	}
 	println("Finished the model result tester step");
 	println("AutoParSelector script finished");

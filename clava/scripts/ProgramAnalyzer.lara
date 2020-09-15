@@ -25,7 +25,7 @@ aspectdef ProgramAnalyzer
 	var params = Object.assign({}, originalParams);
 
 	var start_time = performance.now();
-	var AnalyzerResults = createBenchGroupResultsObj(params["loopGroupSizeLimit"]);
+	var AnalyzerResults = createAnalyzerResultsObj(params["loopGroupSizeLimit"]);
 
 	var benchmarks = getBenchmarks(params);
 
@@ -79,7 +79,7 @@ aspectdef ProgramAnalyzer
 				parLoopGroups = getObjFromCache(params, "parLoopGroups");
 				benchmarkResults = getObjFromCache(params, "benchmarkResults");
 			}
-			else {			
+			else {
 				if(params["foldersToGetExpectedC"].includes(benchmark.name))
 					parLoops = getParLoopsFromExpectedOutput(params);
 				else

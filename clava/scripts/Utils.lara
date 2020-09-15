@@ -192,7 +192,7 @@ function searchSubFolders(params) {
 //TODO test this
 function searchProgramFiles(params) {
 	var sourceFolder = params["sourceFolder"];
-	//var benchmarkFolders = params["benchmarkFolders"];
+
 	var excludedFiles = params["excludedFiles"];
 	
 	var excludedFolders = [];
@@ -200,10 +200,7 @@ function searchProgramFiles(params) {
 		excludedFolders.push(Io.getAbsolutePath(sourceFolder, excludedFolder));
 	}
 
-	var benchmarks = [];	
-	/*if(benchmarkFolders.length == 0) {
-		return benchmarks;
-	}*/
+	var benchmarks = [];
 	
 	benchmarkFolders = [];
 	var allFolders = Io.getFolders(sourceFolder);
@@ -279,7 +276,6 @@ function createBenchmarkObj(folderPath, files) {
 	return benchmark;
 }
 
-//TODO test this (expected C)
 function rebuildCodeAst(params, xtraFiles, xtraIncludeFolders, readFromExpectedC) {
 	var benchmark = params["dynamic"]["benchmark"];
 	var preprocessorFlags = params["dynamic"]["preprocessorFlags"];
@@ -484,34 +480,10 @@ function createParLoopObj() {
 	//standard info
 	parLoopObj["id"] = "";
 	parLoopObj["ompPragma"] = "";
-	//parLoopObj["isMainLoop"] = false;
 	parLoopObj["parentLoopId"] = "";
 	parLoopObj["origLine"] = -1;
-	//parLoopObj["nestedLevel"] = -1;
-	//parLoopObj["isInnermost"] = false;
-	//parLoopObj["isOutermost"] = false;
 	parLoopObj["rank"] = [];
 	parLoopObj["index"] = -1;
-
-	//iteration info
-	/*parLoopObj["maxIterations"] = 0;
-	parLoopObj["minIterations"] = 0;
-	parLoopObj["avgIterations"] = 0;
-	parLoopObj["stdDevIterations"] = 0;
-	parLoopObj["timesLoopIsCalled"] = 0;
-	parLoopObj["hasIterationVariation"] = false;
-	*/
-
-	//parent iteration info
-	/*parLoopObj["maxParentIterations"] = 0;
-	parLoopObj["minParentIterations"] = 0;
-	parLoopObj["avgParentIterations"] = 0;
-	parLoopObj["stdDevParentIterations"] = 0;
-	parLoopObj["hasParentIterationVariation"] = false;
-	*/
-	
-	//instruction info
-	//parLoopObj["instructionInfo"] = {};
 
 	//features
 	parLoopObj["features"] = {};
@@ -575,12 +547,7 @@ function getParLoops(functionFilters) {
 			}
 			parLoop["id"] = loop.id;
 			parLoop["ompPragma"] = pragmas["parallelLoops"][loop.id];
-			//parLoop["isMainLoop"] = false;
 			parLoop["parentLoopId"] = parentLoopId;
-			/*parLoop["features"] = {
-				"static": {},
-				"dynamic": {}
-			};*/
 			getOmpPragmaFeatures(parLoop);
 			parLoops[loop.id] = parLoop;	
 
@@ -611,12 +578,7 @@ function getParLoopsFromExpectedOutput(params) {
 		}
 		parLoop["id"] = loopId;
 		parLoop["ompPragma"] = pragma.code;
-		//parLoop["isMainLoop"] = false;
 		parLoop["parentLoopId"] = parentLoopId;
-		/*parLoop["features"] = {
-			"static": {},
-			"dynamic": {}
-		};*/
 		getOmpPragmaFeatures(parLoop);
 		parLoops[loopId] = parLoop;	
 	}
@@ -627,12 +589,6 @@ function getParLoopsFromExpectedOutput(params) {
 
 function getOmpPragmaFeatures(parLoop) {
 	var pragma = parLoop["ompPragma"];
-	/*parLoop["features"]["static"]["omp_n_privates"] = 0;
-	parLoop["features"]["static"]["omp_n_first_privates"] = 0;
-	parLoop["features"]["static"]["omp_n_reductions"] = 0;
-	parLoop["features"]["static"]["omp_n_scalar_reductions"] = 0;
-	parLoop["features"]["static"]["omp_n_array_reductions"] = 0;
-	*/
 
 	var privateRegex =  /private([^)]+)/g;
 	var privateResult = pragma.match(privateRegex);
@@ -757,18 +713,18 @@ function getMainLoopIds(parLoops) {
 	return mainLoopsIds;
 }
 
-function createBenchGroupResultsObj(loopGroupSizeLimit) {
-	var benchGroupResultsObj = {};
-	benchGroupResultsObj["loopGroupSizeLimit"] = loopGroupSizeLimit;
-	benchGroupResultsObj["totalRuns"] = 0;
-	benchGroupResultsObj["totalVersions"] = 0;
-	benchGroupResultsObj["totalParLoops"] = 0;
-	benchGroupResultsObj["totalExecutionTimeInSec"] = 0;
-	benchGroupResultsObj["totalBenchmarks"] = 0;
-	benchGroupResultsObj["totalBenchmarkVersions"] = 0;
-	benchGroupResultsObj["benchmarks"] = [];
+function createAnalyzerResultsObj(loopGroupSizeLimit) {
+	var analyzerResultsObj = {};
+	analyzerResultsObj["loopGroupSizeLimit"] = loopGroupSizeLimit;
+	analyzerResultsObj["totalRuns"] = 0;
+	analyzerResultsObj["totalVersions"] = 0;
+	analyzerResultsObj["totalParLoops"] = 0;
+	analyzerResultsObj["totalExecutionTimeInSec"] = 0;
+	analyzerResultsObj["totalBenchmarks"] = 0;
+	analyzerResultsObj["totalBenchmarkVersions"] = 0;
+	analyzerResultsObj["benchmarks"] = [];
 
-	return benchGroupResultsObj;
+	return analyzerResultsObj;
 }
 
 function createBenchResultsObj(benchmark, problemSizeFlag) {
@@ -799,7 +755,7 @@ function concatFlags(flags) {
 /**
 searches for loops
 @param functionFilters String[], ...
-@param inclusive boolean, if true only retrieve loops inside the filtered functions
+@param isInclusive boolean, if true only retrieve loops inside the filtered functions
 @return joinpoint[], ...
 **/
 function getLoopsFiltered(functionFilters, isInclusive) {
@@ -839,6 +795,42 @@ function getLoopsFromIds(loopIdFilters) {
 		
 		if(loopIdFilters.contains(foundLoop.id)) {
 			loops[foundLoop.id] = foundLoop;
+		}
+	}
+	
+	return loops;
+}
+
+function getLoopsModelTester() {
+	var loops = [];
+	var foundKernelPragma = false;
+	var pragmaKernelJp = null;
+	
+	for(var result of Query.search('pragma')) {
+		if(result.name == "kernel") {
+			pragmaKernelJp = result.target;
+			foundKernelPragma = true;
+			break;
+		}
+	}
+
+	if(foundKernelPragma) {
+		for(var result of Query.searchFrom(pragmaKernelJp, 'loop')) {
+			if(result.kind != "for")
+				continue;
+
+			loops.push(result);
+		}
+	}
+	else {
+		for(var result of Query.search('function').search('loop').chain()) {
+			var foundLoop = result["loop"];
+	
+			if(foundLoop.kind != "for" || !(result["function"].name.startsWith("kernel"))) {
+				continue;
+			}
+			
+			loops.push(foundLoop);
 		}
 	}
 	
@@ -981,3 +973,336 @@ function checkEmptyParLoops(parLoops, params) {
 
 	return false;
 }
+
+function createModelTesterObj() {
+	var modelTesterObj = {};
+	modelTesterObj["modelName"] = "";
+	modelTesterObj["modelClassification"] = false;
+	modelTesterObj["targetIds"] = [];
+	modelTesterObj["targetProblemSizeFlags"] = [];
+	modelTesterObj["targetOmpPragmas"] = [];
+	modelTesterObj["targetPredictions"] = [];
+	modelTesterObj["targetValuesPostProcess"] = [];
+	modelTesterObj["targetValuesOrig"] = [];
+	modelTesterObj["classification_stats"] = {};
+	modelTesterObj["r2_score"] = 0;
+	modelTesterObj["parByModel"] = [];
+	modelTesterObj["parByAutoPar"] = [];
+	modelTesterObj["benchmarks_runs"] = {};
+	
+	modelTesterObj["global_stats"] = {};
+	modelTesterObj["global_stats"]["parCandidates"] = 0;
+	modelTesterObj["global_stats"]["parPrediction"] = 0;
+	modelTesterObj["global_stats"]["parModel"] = 0;
+	modelTesterObj["global_stats"]["parAutoPar"] = 0;
+	modelTesterObj["global_stats"]["parModel_NotAutoPar"] = 0;
+	modelTesterObj["global_stats"]["parAutoPar_NotModel"] = 0;
+	modelTesterObj["global_stats"]["parPrediction_NotModel"] = 0;
+	modelTesterObj["global_stats"]["parAutoPar_AndModel"] = 0;
+	modelTesterObj["global_stats"]["parAutoPar_AndPrediction"] = 0;
+
+	return modelTesterObj;
+}
+
+function createBenchStatsObj() {
+	var benchStatsObj = {};
+
+	benchStatsObj["parCandidates"] = 0;
+	benchStatsObj["parPrediction"] = 0;
+	benchStatsObj["parModel"] = 0;
+	benchStatsObj["parAutopar"] = 0;
+	benchStatsObj["parModel_NotAutoPar"] = 0;
+	benchStatsObj["parAutoPar_NotModel"] = 0;
+	benchStatsObj["parPrediction_NotModel"] = 0;
+	benchStatsObj["parAutoPar_AndModel"] = 0;
+	benchStatsObj["parAutoPar_AndPrediction"] = 0;
+
+	return benchStatsObj;
+}
+
+function updateBenchStats(benchStats, parInfoModel, parInfoAutopar, commentedLoopPragmas) {
+	var parLoopIds = Object.keys(parInfoAutopar["parallelLoops"]);
+	var loops = getLoopsFromIds(parLoopIds);
+
+	benchStats["parCandidates"] = parLoopIds.length;
+	benchStats["parPrediction"] = parInfoModel["selectedIds"].length;
+	benchStats["parModel"] = parInfoModel["parLoopIds"].length;
+
+	for(var loopId of parLoopIds) {
+		if(!commentedLoopPragmas.includes(loopId)) {
+			benchStats["parAutopar"] += 1;
+
+			if(parInfoModel["parLoopIds"].includes(loopId)) {
+				benchStats["parAutoPar_AndModel"] += 1;
+			}
+			else {
+				benchStats["parAutoPar_NotModel"] += 1;
+			}
+
+			if(parInfoModel["selectedIds"].includes(loopId)) {
+				benchStats["parAutoPar_AndPrediction"] += 1;
+			}
+		}
+		else {
+
+			if(parInfoModel["parLoopIds"].includes(loopId)) {
+				benchStats["parModel_NotAutoPar"] += 1;
+			}
+		}
+
+		if(parInfoModel["selectedIds"].includes(loopId) && !parInfoModel["parLoopIds"].includes(loopId)) {
+			benchStats["parPrediction_NotModel"] += 1;
+		}
+	}
+}
+
+function createBenchTimeObj(benchName, problemSizeFlag, modelTime, autoparTime) {
+	var benchTimeObj = {};
+	benchTimeObj["benchName"] = "";
+	benchTimeObj["problemSizeFlag"] = "";
+	benchTimeObj["modelTime"] = -1;
+	benchTimeObj["autoparTime"] = -1;
+
+	return benchTimeObj;
+}
+
+function getModelPredictionsInfo(modelTesterObj, resultsFile) {
+	var path = "." + folderSeparator + "model-outputs" + folderSeparator + resultsFile + ".json";
+	var obj = Io.readJson(path);
+
+	modelTesterObj["modelName"] = obj["modelName"];
+	modelTesterObj["modelClassification"] = obj["modelClassification"];
+	modelTesterObj["targetIds"] = obj["targetIds"];
+	modelTesterObj["targetProblemSizeFlags"] = obj["targetProblemSizeFlags"];
+	modelTesterObj["targetOmpPragmas"] = obj["targetOmpPragmas"];
+	modelTesterObj["targetPredictions"] = obj["targetPredictions"];
+	modelTesterObj["targetValuesPostProcess"] = obj["targetValuesPostProcess"];
+	modelTesterObj["targetValuesOrig"] = obj["targetValuesOrig"];
+	modelTesterObj["classification_stats"] = obj["classification_stats"];
+	modelTesterObj["r2_score"] = obj["r2_score"];
+	
+	
+	return modelTesterObj;
+}
+
+//check this function
+function addPragmasModelTester(modelTesterObj, functionFilters, problemSizeFlag) {
+	//var $loopJps = getLoopsFiltered(functionFilters, true);
+	var $loopJps = getLoopsModelTester();
+	var loopGroups = getParLoopGroupsModelTester($loopJps);
+	var selectedLoops = {};
+	var loopIds = [];
+	var parLoopIds = [];
+	
+	for(var $loop of $loopJps) {
+		loopIds.push($loop.id);
+	}
+
+	for(var i = 0; i < modelTesterObj["targetIds"].length; i++) {
+		var targetId = modelTesterObj["targetIds"][i];
+		var targetProblemSize = modelTesterObj["targetProblemSizeFlags"][i];
+		if(!loopIds.includes(targetId)) {
+			continue;
+		}
+
+		for(var $loop of $loopJps) {
+			var loopId = $loop.id;
+			if(loopId == targetId && targetProblemSize == problemSizeFlag) {
+				if((modelTesterObj["modelClassification"] && modelTesterObj["targetPredictions"][i] == 0) || 
+					(!modelTesterObj["modelClassification"] && modelTesterObj["targetPredictions"][i] <= 1)) {
+					continue;
+				}
+				
+				selectedLoops[loopId] = {
+					"loopJp": $loop,
+					"ompPragma": modelTesterObj["targetOmpPragmas"][i],
+					"prediction": modelTesterObj["targetPredictions"][i]
+				};
+				break;
+			}
+		}
+	}
+
+	var selectedIds = Object.keys(selectedLoops);
+
+	for(var loopGroup of loopGroups) {
+		var $loop;
+		var prediction = 0;
+		var nestedLevel = 0;
+		var pragma = "";
+		var firstIter = true;
+		
+		for(var loopId of loopGroup) {
+			if(!selectedIds.includes(loopId)) {
+				continue;
+			}
+
+			if(firstIter) {
+				if((modelTesterObj["modelClassification"] && selectedLoops[loopId]["prediction"] == 0) || 
+					(!modelTesterObj["modelClassification"] && selectedLoops[loopId]["prediction"] <= 1)) {
+					continue;
+				}
+				
+				$loop = selectedLoops[loopId]["loopJp"];
+				prediction = selectedLoops[loopId]["prediction"];
+				nestedLevel = selectedLoops[loopId]["loopJp"].nestedLevel;
+				pragma = selectedLoops[loopId]["ompPragma"];
+				firstIter = false;
+			}
+			else {
+				if((modelTesterObj["modelClassification"] && selectedLoops[loopId]["prediction"] == 1 && 
+				selectedLoops[loopId]["loopJp"].nestedLevel < nestedLevel) || (!modelTesterObj["modelClassification"] && 
+				selectedLoops[loopId]["prediction"] > prediction)) {
+					$loop = selectedLoops[loopId]["loopJp"];
+					prediction = selectedLoops[loopId]["prediction"];
+					nestedLevel = selectedLoops[loopId]["loopJp"].nestedLevel;
+					pragma = selectedLoops[loopId]["ompPragma"];
+				}
+			}
+
+		}
+
+		//check if at least one suitable loop was found
+		if(!firstIter) {
+			$loop.insertBefore(pragma);
+			parLoopIds.push($loop.id);
+		}
+	}
+
+	var parInfoModel = {
+		"selectedIds": selectedIds,
+		"parLoopIds": parLoopIds
+	};
+
+	return parInfoModel;
+}
+
+function addTimerModelTester() {
+	var measures = [];
+	var foundKernelPragma = false;
+
+	var jpToMeasure = null;
+	
+	for(var result of Query.search('pragma')) {
+		if(result.name == "kernel") {
+			jpToMeasure = result;
+			foundKernelPragma = true;
+
+			var measurePrefix = "mprefix_performance";
+			var measure = new CustomExecutionTimeMetric(measurePrefix);
+			measures.push(measure);		
+			measure.instrument(jpToMeasure, jpToMeasure.target, false);
+			break;
+		}
+	}
+
+	if(!foundKernelPragma) {
+		for(var result of Query.search('call')) {
+			if(result.name.startsWith("kernel")) {
+				jpToMeasure = result;
+				var measurePrefix = "mprefix_performance";
+				var measure = new CustomExecutionTimeMetric(measurePrefix);
+				measures.push(measure);		
+				measure.instrument(jpToMeasure, undefined, false);
+				break;
+			}
+		}
+	}
+	
+	return measures;
+}
+
+function updateModelTesterObj(modelTesterObj, benchmarkFolder, problemSizeFlag, measures, executors, isAutoPar) {
+	for(var measure of measures) {
+		var runs = [];
+		var avg = {
+			"value": 0,
+			"unit": ""
+		};
+		var valid_avg = false;
+		
+		for(var executor of executors) {
+			var res = measure.report(executor);
+			var newRes = {};
+			newRes.value = res.getValue();
+			newRes.unit = res.getUnit();
+			runs.push(newRes);
+			avg.value += res.getValue();;
+			avg.unit = res.getUnit();
+		}
+		
+		if(executors.length != 0) {
+			avg.value /= executors.length;
+		}
+
+		if(isAutoPar) {
+			modelTesterObj["benchmarks_runs"][benchmarkFolder][problemSizeFlag]["autopar_times"] = runs;
+			
+			modelTesterObj["benchmarks_runs"][benchmarkFolder][problemSizeFlag]["autopar_times_avg"] = avg;
+			
+			modelTesterObj["benchmarks_runs"][benchmarkFolder][problemSizeFlag]["model_speedup_against_autopar"] = 
+				modelTesterObj["benchmarks_runs"][benchmarkFolder][problemSizeFlag]["autopar_times_avg"]["value"] / 
+				modelTesterObj["benchmarks_runs"][benchmarkFolder][problemSizeFlag]["model_times_avg"]["value"];
+		}
+		else {
+			modelTesterObj["benchmarks_runs"][benchmarkFolder][problemSizeFlag]["model_times"] = runs;
+			modelTesterObj["benchmarks_runs"][benchmarkFolder][problemSizeFlag]["model_times_avg"] = avg;
+		}
+	}
+}
+
+function addBenchStatsModelTesterObj(modelTesterObj, benchmarkFolder, problemSizeFlag, benchStats) {
+	modelTesterObj["benchmarks_runs"][benchmarkFolder][problemSizeFlag]["stats"] = benchStats;
+	var keys = Object.keys(benchStats);
+
+	modelTesterObj["global_stats"]["parCandidates"] += benchStats["parCandidates"];
+	modelTesterObj["global_stats"]["parPrediction"] += benchStats["parPrediction"];
+	modelTesterObj["global_stats"]["parModel"] += benchStats["parModel"];
+	modelTesterObj["global_stats"]["parAutoPar"] += benchStats["parAutopar"];
+	modelTesterObj["global_stats"]["parModel_NotAutoPar"] += benchStats["parModel_NotAutoPar"];
+	modelTesterObj["global_stats"]["parAutoPar_NotModel"] += benchStats["parAutoPar_NotModel"];
+	modelTesterObj["global_stats"]["parPrediction_NotModel"] += benchStats["parPrediction_NotModel"];
+	modelTesterObj["global_stats"]["parAutoPar_AndModel"] += benchStats["parAutoPar_AndModel"];;
+	modelTesterObj["global_stats"]["parAutoPar_AndPrediction"] += benchStats["parAutoPar_AndPrediction"];
+}
+
+function getParLoopGroupsModelTester($loopJps) {
+	var loopGroups = [];
+	var processedIds = [];
+	var loopIds = [];
+	var currLvl = 0;
+
+	for(var $loop of $loopJps) {
+		loopIds.push($loop.id);
+	}
+
+	while(processedIds.length < $loopJps.length) {
+
+		for(var $loop of $loopJps) {
+			var loopId = $loop.id;
+		
+			if($loop.nestedLevel != currLvl || processedIds.includes(loopId))
+				continue;
+		
+			var currentGroup = [];
+			currentGroup.push(loopId);
+			processedIds.push(loopId);
+			
+			var $loopDescendants = $loop.descendants("loop");
+			for(var $descendant of $loopDescendants) {
+				if(!loopIds.includes($descendant.id)) {
+					continue;
+				}
+
+				processedIds.push($descendant.id);
+				currentGroup.push($descendant.id);
+			}
+
+			loopGroups.push(currentGroup);
+		}
+		currLvl += 1;
+	}
+
+	return loopGroups;
+}
+

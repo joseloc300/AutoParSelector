@@ -1,9 +1,79 @@
+import clava.autopar.Parallelize;
+import clava.autopar.ParallelizeLoop;
+import lara.Io;
+import lara.util.LocalFolder;
+import clava.ClavaJoinPoints;
+import lara.cmake.CMaker;
+import weaver.util.WeaverDataStore;
+import lara.code.Timer;
+import lara.metrics.ExecutionTimeMetric;
+import weaver.Query;
+import lara.Strings;
+
+import CustomExecutionTimeMetric;
+import CustomParallelize;
+import IterCounting;
+import LoopInfo;
+import Utils;
+
 aspectdef ModelTester
 	input
-		originalResults,
+		originalParams,
+		resultsFile,
 		now
 	end
 
+	var params = Object.assign({}, originalParams);
+
+	var modelTesterObj = createModelTesterObj();
+	getModelPredictionsInfo(modelTesterObj, resultsFile);
+
+	var benchmarks = getBenchmarks(params);
+
+	var problemSizeFlags = Array.from(params["problemSizeFlags"]);
+	if(problemSizeFlags.length == 0) {
+		problemSizeFlags = [""];
+	}
+
+	println("Number of benchmarks found: " + benchmarks.length);
+	println("Processing benchmarks");
+	for (var benchmark of benchmarks) {
+		println("Processing: " + benchmark.folder);
+		modelTesterObj["benchmarks_runs"][benchmark.folder] = {};
+		
+		for(var problemSizeFlag of problemSizeFlags) {
+			var benchStats = createBenchStatsObj();
+
+			println("Current problem size flag = " + problemSizeFlag);
+			modelTesterObj["benchmarks_runs"][benchmark.folder][problemSizeFlag] = {};
+			
+			Clava.pushAst();
+			
+			updateDynamicParams(params, benchmark, problemSizeFlag);
+			rebuildCodeAst(params, params["xtraFiles"], params["xtraIncludeFolders"], false);
+			
+			Clava.pushAst();
+
+			var parInfoModel = addPragmasModelTester(modelTesterObj, params["functionFilters"], problemSizeFlag);
+			var measuresModel = addTimerModelTester();
+			var executorsModel = buildAndRun(params, "modelTesterModel", params["nRuns"], true, params["autoParSelectorFlags"]["cleanBuilds"]);
+			updateModelTesterObj(modelTesterObj, benchmark.folder, problemSizeFlag, measuresModel, executorsModel, false);
+			Clava.popAst();
+			
+			var loopJps = getLoopsModelTester();
+			var parInfoAutopar = Parallelize.getForLoopsPragmas(loopJps, true, true);
+			var commentedLoopPragmas = Parallelize.removeNestedPragmas();
+			updateBenchStats(benchStats, parInfoModel, parInfoAutopar, commentedLoopPragmas);
+			var measuresAutoPar = addTimerModelTester();
+			var executorsAutoPar = buildAndRun(params, "modelTesterAutoPar", params["nRuns"], true, params["autoParSelectorFlags"]["cleanBuilds"]);
+			updateModelTesterObj(modelTesterObj, benchmark.folder, problemSizeFlag, measuresAutoPar, executorsAutoPar, true);
+			addBenchStatsModelTesterObj(modelTesterObj, benchmark.folder, problemSizeFlag, benchStats);
+			Clava.popAst();
+		}
+
+	}
 	
+	Io.writeJson("." + folderSeparator + "model-performance" + folderSeparator + modelTesterObj["modelName"] + "_" + params["benchGroupName"] + "_" + ".json", modelTesterObj);
+	println("Finished processing " + params["benchGroupName"]);
 
 end
