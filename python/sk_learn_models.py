@@ -1,7 +1,7 @@
 import numpy as np
 import json
 from joblib import dump, load
-from os import mkdir, path
+from os import makedirs, path
 
 from imblearn.over_sampling import SMOTE
 from imblearn.pipeline import Pipeline
@@ -14,6 +14,7 @@ from sklearn.neural_network import MLPRegressor
 from sklearn import svm
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import classification_report
+from sklearn.metrics import mean_squared_error
 
 from sklearn.model_selection import GridSearchCV, ParameterGrid
 
@@ -21,11 +22,12 @@ from tensorflow.keras.utils import normalize
 
 
 # https://scikit-learn.org/stable/tutorial/machine_learning_map/index.html
-def run_sk_regression(x_train, x_test, y_train, y_test, main_params, selected_feature_indices):
+def run_sk_regression(x_train, x_test, y_train, y_test, main_params, selected_feature_indices, new_feature_names):
     print("+ SKLearn Regression Models")
 
     regression_params = main_params["create_models"]["regression"]
-    model_processing_params = create_model_processing_params(main_params["data_processing"], selected_feature_indices)
+    model_processing_params = create_model_processing_params(main_params["data_processing"], selected_feature_indices,
+                                                             new_feature_names)
 
     # simplest model, linear
     if regression_params["ordinary_least_squares"]:
@@ -59,14 +61,19 @@ def ordinary_least_squares(x_train, x_test, y_train, y_test, model_processing_pa
 
     r2_score = reg.score(x_test, y_test)
 
+    y_test_predict = reg.predict(x_test)
+    mse = mean_squared_error(y_test, y_test_predict)
+
     print("\nOrdinary Least Squares")
+    print("MSE: " + str(mse))
     print("R2 Score: " + str(r2_score))
 
     if not path.exists("./models/regression/ordinary_least_squares"):
-        mkdir("./models/regression/ordinary_least_squares")
+        makedirs("./models/regression/ordinary_least_squares")
     dump(reg, "./models/regression/ordinary_least_squares/model.dump")
 
     model_stats = {
+        "mse": mse,
         "r2_score": r2_score
     }
 
@@ -108,17 +115,22 @@ def lasso(x_train, x_test, y_train, y_test, model_processing_params):
     all_y = np.append(y_train, y_test)
     r2_score = lasso_instance.score(all_x, all_y)
 
+    y_test_predict = lasso_instance.predict(x_test)
+    mse = mean_squared_error(y_test, y_test_predict)
+
     print("\nLasso")
+    print("MSE: " + str(mse))
     print("R2 score: " + str(r2_score))
     print("Best Score:" + str(best_score))
     print("Best params:")
     print(best_params)
 
     if not path.exists("./models/regression/lasso"):
-        mkdir("./models/regression/lasso")
+        makedirs("./models/regression/lasso")
     dump(lasso_instance, "./models/regression/lasso/model.dump")
 
     model_stats = {
+        "mse": mse,
         "r2_score": r2_score,
         "best_score": best_score,
         "best_params": best_params
@@ -162,17 +174,22 @@ def elastic_net(x_train, x_test, y_train, y_test, model_processing_params):
     all_y = np.append(y_train, y_test)
     r2_score = elastic_net_instance.score(all_x, all_y)
 
+    y_test_predict = elastic_net_instance.predict(x_test)
+    mse = mean_squared_error(y_test, y_test_predict)
+
     print("\nElastic Net")
+    print("MSE: " + str(mse))
     print("R2 score: " + str(r2_score))
     print("Best Score:" + str(best_score))
     print("Best params:")
     print(best_params)
 
     if not path.exists("./models/regression/elastic_net"):
-        mkdir("./models/regression/elastic_net")
+        makedirs("./models/regression/elastic_net")
     dump(elastic_net_instance, "./models/regression/elastic_net/model.dump")
 
     model_stats = {
+        "mse": mse,
         "r2_score": r2_score,
         "best_score": best_score,
         "best_params": best_params
@@ -216,17 +233,22 @@ def svr(x_train, x_test, y_train, y_test, model_processing_params):
     all_y = np.append(y_train, y_test)
     r2_score = svr_instance.score(all_x, all_y)
 
+    y_test_predict = svr_instance.predict(x_test)
+    mse = mean_squared_error(y_test, y_test_predict)
+
     print("\nSVR")
+    print("MSE: " + str(mse))
     print("R2 score: " + str(r2_score))
     print("Best Score:" + str(best_score))
     print("Best params:")
     print(best_params)
 
     if not path.exists("./models/regression/svr"):
-        mkdir("./models/regression/svr")
+        makedirs("./models/regression/svr")
     dump(svr_instance, "./models/regression/svr/model.dump")
 
     model_stats = {
+        "mse": mse,
         "r2_score": r2_score,
         "best_score": best_score,
         "best_params": best_params
@@ -270,17 +292,22 @@ def ridge_regression(x_train, x_test, y_train, y_test, model_processing_params):
     all_y = np.append(y_train, y_test)
     r2_score = ridge_regression_instance.score(all_x, all_y)
 
+    y_test_predict = ridge_regression_instance.predict(x_test)
+    mse = mean_squared_error(y_test, y_test_predict)
+
     print("\nRidge Regression")
+    print("MSE: " + str(mse))
     print("R2 score: " + str(r2_score))
     print("Best Score:" + str(best_score))
     print("Best params:")
     print(best_params)
 
     if not path.exists("./models/regression/ridge_regression"):
-        mkdir("./models/regression/ridge_regression")
+        makedirs("./models/regression/ridge_regression")
     dump(ridge_regression_instance, "./models/regression/ridge_regression/model.dump")
 
     model_stats = {
+        "mse": mse,
         "r2_score": r2_score,
         "best_score": best_score,
         "best_params": best_params
@@ -324,17 +351,22 @@ def decision_tree_regressor(x_train, x_test, y_train, y_test, model_processing_p
     all_y = np.append(y_train, y_test)
     r2_score = decision_tree_regression_instance.score(all_x, all_y)
 
+    y_test_predict = decision_tree_regression_instance.predict(x_test)
+    mse = mean_squared_error(y_test, y_test_predict)
+
     print("\nDecision Tree Regressor")
+    print("MSE: " + str(mse))
     print("R2 score: " + str(r2_score))
     print("Best Score:" + str(best_score))
     print("Best params:")
     print(best_params)
 
     if not path.exists("./models/regression/decision_tree_regressor"):
-        mkdir("./models/regression/decision_tree_regressor")
+        makedirs("./models/regression/decision_tree_regressor")
     dump(decision_tree_regression_instance, "./models/regression/decision_tree_regressor/model.dump")
 
     model_stats = {
+        "mse": mse,
         "r2_score": r2_score,
         "best_score": best_score,
         "best_params": best_params
@@ -366,11 +398,12 @@ def neural_network_sklearn(x_train, x_test, y_train, y_test):
 
 
 # https://scikit-learn.org/stable/tutorial/machine_learning_map/index.html
-def run_sk_classification(loop_features, loop_targets, main_params, selected_feature_indices):
+def run_sk_classification(loop_features, loop_targets, main_params, selected_feature_indices, new_feature_names):
     print("+ SKLearn Classification Models")
 
     classification_params = main_params["create_models"]["classification"]
-    model_processing_params = create_model_processing_params(main_params["data_processing"], selected_feature_indices)
+    model_processing_params = create_model_processing_params(main_params["data_processing"], selected_feature_indices,
+                                                             new_feature_names)
 
     if classification_params["svc"]:
         svc(loop_features, loop_targets, model_processing_params)
@@ -395,7 +428,7 @@ def svc(loop_features, loop_targets, model_processing_params):
     gscv.fit(loop_features, loop_targets)
 
     if not path.exists("./models/classification/svc"):
-        mkdir("./models/classification/svc")
+        makedirs("./models/classification/svc")
     dump(gscv, "./models/classification/svc/model.dump")
 
     score_gscv = gscv.score(loop_features, loop_targets)
@@ -440,7 +473,7 @@ def kn_classifier(loop_features, loop_targets, model_processing_params):
     gscv.fit(loop_features, loop_targets)
 
     if not path.exists("./models/classification/kn_classifier"):
-        mkdir("./models/classification/kn_classifier")
+        makedirs("./models/classification/kn_classifier")
     dump(gscv, "./models/classification/kn_classifier/model.dump")
 
     score_gscv = gscv.score(loop_features, loop_targets)
@@ -483,7 +516,7 @@ def make_predictions(loop_features, loop_targets, loop_targets_orig, prediction_
         "targetValuesPostProcess": loop_targets,
         "targetValuesOrig": loop_targets_orig,
         "classification_stats": [],
-        "r2_score": []
+        "regression_stats": []
     }
 
     if len(loop_targets) > 0:
@@ -493,19 +526,23 @@ def make_predictions(loop_features, loop_targets, loop_targets_orig, prediction_
                 "classification_report": classification_report(loop_targets, y_pred, output_dict=True)
             }
         else:
-            model_predictions["r2_score"] = model.score(loop_features, loop_targets)
+            model_predictions["regression_stats"] = {
+                "r2_score": model.score(loop_features, loop_targets),
+                "mse": mean_squared_error(loop_targets, y_pred)
+             }
 
     with open("./predictions/" + prediction_params["model_name"] + ".json", "w") as outfile:
         json.dump(model_predictions, outfile, indent=4)
 
 
-def create_model_processing_params(processing_params, selected_features_indices):
+def create_model_processing_params(processing_params, selected_features_indices, new_feature_names):
     model_processing_params = {
         "threshold_target": processing_params["threshold_target"],
         "handle_invalid_inputs": processing_params["handle_invalid_inputs"],
         "scale_data_algorithm": processing_params["scale_data_algorithm"],
         "feature_selection_params": processing_params["feature_selection_params"],
-        "selected_features_indices": selected_features_indices
+        "selected_features_indices": selected_features_indices,
+        "selected_features_names": new_feature_names
     }
 
     return model_processing_params

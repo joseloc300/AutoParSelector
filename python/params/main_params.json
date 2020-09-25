@@ -1,5 +1,5 @@
 {
-  "read_data_prefixes": ["poly"],
+  "read_data_prefixes": [],
   "sampling_params": {
     "train_ratio": 0.8,
     "block_size": 10,
@@ -22,44 +22,44 @@
   "data_processing": {
     "threshold_target": {
       "enabled": true,
-      "threshold": 0.25
+      "threshold": 1
     },
     "handle_invalid_inputs": true,
     "scale_data_algorithm": 2,
     "feature_selection_params": {
       "enabled": true,
-      "algorithm": 0,
+      "algorithm": 1,
       "variance_threshold": 0.05,
       "target_correlation": {
         "use_threshold": false,
         "mode": "abs",
         "target_correlation_threshold": 0.02,
-        "top_x_correlation": 20
+        "top_x_correlation": 30
       }
     },
-    "regression_smote": true
+    "regression_smote": false
   },
   "create_models": {
     "regression": {
       "enabled": false,
-      "ordinary_least_squares": true,
+      "ordinary_least_squares": false,
       "lasso": false,
       "elastic_net": false,
-      "svr": false,
-      "ridge_regression": false,
+      "svr": true,
+      "ridge_regression": true,
       "decision_tree_regressor": true,
       "neural_network_sklearn": false
     },
     "classification": {
-      "enabled": true,
-      "svc": false,
+      "enabled": false,
+      "svc": true,
       "kn_classifier": true
     }
   },
   "make_prediction": {
-    "enabled": true,
-    "model_name": "kn_classifier",
-    "is_classification": true,
-    "model_folder_path": "./models/classification/kn_classifier"
+    "enabled": false,
+    "model_name": "svr",
+    "is_classification": false,
+    "model_folder_path": "./models/regression/svr"
   }
 }

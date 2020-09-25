@@ -192,9 +192,11 @@ def fs_target_correlation(loop_features, loop_targets, feature_names, target_cor
                                                 list(range(np.shape(ordered_indices)[0] - 1,
                                                            np.shape(ordered_indices)[0] - 1 - top_x_correlation, -1)))
 
+        selected_features_indices = selected_features_indices.tolist()
+
     new_feature_names = np.array(feature_names)[selected_features_indices]
     new_feature_names = new_feature_names.tolist()
-    new_feature_indices = selected_features_indices.tolist()
+    new_feature_indices = selected_features_indices
 
     print(new_feature_names)
     print(original_target_correlation[selected_features_indices])
@@ -209,7 +211,7 @@ def fs_target_correlation(loop_features, loop_targets, feature_names, target_cor
         "target_correlation_threshold": target_correlation_threshold,
         "top_x_correlation": top_x_correlation,
         "selected_features": new_feature_names,
-        "selected_features_indices": selected_features_indices.tolist(),
+        "selected_features_indices": selected_features_indices,
         "selected_features_correlation": target_correlation[selected_features_indices].tolist()
     }
 

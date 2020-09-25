@@ -53,7 +53,7 @@ def create_regression_models(loop_features, loop_targets, feature_names, main_pa
     if main_params["data_processing"]["regression_smote"]:
         x_train, y_train = smote_oversampling_regression(x_train, y_train, new_feature_names)
 
-    run_sk_regression(x_train, x_test, y_train, y_test, main_params, new_feature_indices)
+    run_sk_regression(x_train, x_test, y_train, y_test, main_params, new_feature_indices, new_feature_names)
     # run_tf_regression(x_train, x_test, y_train, y_test)
 
 
@@ -72,7 +72,7 @@ def create_classification_models(loop_features, loop_targets, feature_names, mai
     # test_ratio = 1 - main_params["sampling_params"]["train_ratio"]
     # x_train, x_test, y_train, y_test = train_test_split(loop_features, loop_targets, test_size=test_ratio)
 
-    run_sk_classification(loop_features, loop_targets, main_params, new_feature_indices)
+    run_sk_classification(loop_features, loop_targets, main_params, new_feature_indices, new_feature_names)
     # run_tf_classification(x_train, x_test, y_train, y_test)
 
 
