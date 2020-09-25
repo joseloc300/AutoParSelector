@@ -1,5 +1,5 @@
 {
-	"benchGroupName": "NAS",
+	"benchGroupName": "NAS_FT",
 	"nRuns": 3,
 	"loopGroupSizeLimit": 1,
 	"sourceFolder": "./sources/NAS/",

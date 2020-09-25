@@ -2,7 +2,12 @@
     "displayParamsHelp": true,
     "paramsToCreate": [],
     "paramsToLoad": [
-        "polybench-c-3.2"
+
     ],
-    "modelResultsToTest": []
+    "modelResultsToTest": {
+        "source_params": [
+            "polybench-c-4.2_TEST"
+        ],
+        "results_file": "nas/ridge_regression"
+    }
 }

@@ -924,7 +924,7 @@ function testPragmas(parLoops, params) {
 		Clava.pushAst();
 
 		if(test_strictness == STRICTNESS_LOW)
-			$loops[loopId].insertAfter("exit(0);");
+			$loops[loopId].insertAfter("exit(" + params["expectedReturnValue"] + ");");
 		addPragmas([loopId], parLoops);
 
 		var executors = buildAndRun(params, "testPragmas", 1, true, true);
@@ -985,9 +985,7 @@ function createModelTesterObj() {
 	modelTesterObj["targetValuesPostProcess"] = [];
 	modelTesterObj["targetValuesOrig"] = [];
 	modelTesterObj["classification_stats"] = {};
-	modelTesterObj["r2_score"] = 0;
-	modelTesterObj["parByModel"] = [];
-	modelTesterObj["parByAutoPar"] = [];
+	modelTesterObj["regression_stats"] = 0;
 	modelTesterObj["benchmarks_runs"] = {};
 	
 	modelTesterObj["global_stats"] = {};
@@ -1079,7 +1077,7 @@ function getModelPredictionsInfo(modelTesterObj, resultsFile) {
 	modelTesterObj["targetValuesPostProcess"] = obj["targetValuesPostProcess"];
 	modelTesterObj["targetValuesOrig"] = obj["targetValuesOrig"];
 	modelTesterObj["classification_stats"] = obj["classification_stats"];
-	modelTesterObj["r2_score"] = obj["r2_score"];
+	modelTesterObj["regression_stats"] = obj["regression_stats"];
 	
 	
 	return modelTesterObj;

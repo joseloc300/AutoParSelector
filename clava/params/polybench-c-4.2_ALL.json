@@ -1,0 +1,53 @@
+{
+	"benchGroupName": "polybench-c-4.2_ALL",
+	"nRuns": 3,
+	"loopGroupSizeLimit": 1,
+	"sourceFolder": "./sources/polybench-c-4.2/",
+	"isBenchmarkSet": true,
+	"benchmarkFolders": [
+		"all"
+	],
+	"functionFilters": [
+		"kernel_"
+	],
+	"problemSizeFlags": [
+		"-DMINI_DATASET",
+		"-DSMALL_DATASET",
+		"-DSTANDARD_DATASET",
+		"-DLARGE_DATASET",
+		"-DEXTRALARGE_DATASET"
+	],
+	"defaultFlag": "-DSTANDARD_DATASET",
+	"foldersToGetExpectedC": [],
+	"excludedFiles": [
+		"Nussinov.orig.c"
+	],
+	"excludedFolders": [
+		"./utilities/"
+	],
+	"xtraFiles": [
+		"./sources/polybench-c-4.2/utilities/polybench.c",
+		"./sources/polybench-c-4.2/utilities/polybench.h"
+	],
+	"xtraIncludeFolders": [
+		"./sources/polybench-c-4.2/utilities/"
+	],
+	"compilationFlags": [
+		"-O3",
+		"-mcmodel=medium"
+	],
+	"compilationLibs": [
+		"m"
+	],
+	"preprocessorFlags": [],
+	"expectedReturnValue": 0,
+	"autoParSelectorFlags": {
+		"testPragmas": 2,
+		"readCache": false,
+		"readFromExpectedOutput": false,
+		"onlyCalculateCaches": false,
+		"expressionBasedIterCounting": true,
+		"cleanBuilds": true,
+		"extractDynamicFeatures": true
+	}
+}
