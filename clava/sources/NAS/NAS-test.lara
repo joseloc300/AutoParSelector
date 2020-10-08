@@ -1,0 +1,18 @@
+import clava.autopar.Parallelize;
+
+aspectdef LUTest
+
+	//var value = "100.304";
+	//println(parseFloat(value));
+
+	setDebug(true);
+
+    var $loops = [];
+    select function{"foo"}.loop end
+	apply
+        $loops.push($loop);
+	end
+
+    Parallelize.forLoops($loops);	
+
+end
